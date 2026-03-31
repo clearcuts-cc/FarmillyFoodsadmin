@@ -575,7 +575,25 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // --- Auth Handling ---
+function runAuthCheck() {
+    if(localStorage.getItem('admin_logged_in') === 'true') {
+        const body = document.body;
+        const loginScreen = document.getElementById('login-screen');
+        const sidebar = document.getElementById('sidebar');
+        const mainWrapper = document.getElementById('main-wrapper');
+        
+        if (body && loginScreen && sidebar && mainWrapper) {
+            body.classList.remove('show-login');
+            loginScreen.style.display = 'none';
+            sidebar.style.display = 'flex';
+            mainWrapper.style.display = 'flex';
+        }
+    }
+}
+runAuthCheck(); // Run instantly when file is parsed.
+
 function handleLogin() {
+    localStorage.setItem('admin_logged_in', 'true');
     document.body.classList.remove('show-login');
     document.getElementById('login-screen').style.display = 'none';
     document.getElementById('sidebar').style.display = 'flex';
@@ -584,6 +602,7 @@ function handleLogin() {
 }
 
 function handleLogout() {
+    localStorage.removeItem('admin_logged_in');
     document.body.classList.add('show-login');
     document.getElementById('login-screen').style.display = 'flex';
     document.getElementById('sidebar').style.display = 'none';
