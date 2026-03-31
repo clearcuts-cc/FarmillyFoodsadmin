@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Farmmily Farms Admin</title>
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="show-login">
+
+    <!-- Login Screen -->
+    <div class="login-container" id="login-screen">
+        <div class="login-card">
+            <h2><i class="ph-fill ph-leaf" style="color: var(--primary-light);"></i> Farmmily Admin</h2>
+            <form onsubmit="event.preventDefault(); handleLogin();">
+                <div class="form-group">
+                    <label class="form-label">Email</label>
+                    <input type="email" class="form-control" value="admin@farmmily.com" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Password</label>
+                    <input type="password" class="form-control" value="password123" required>
+                </div>
+                <button type="submit" class="btn btn-primary" style="width: 100%; padding: 12px; font-size: 1rem; justify-content: center;">Login to Dashboard</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Sidebar -->
+    <div class="sidebar" id="sidebar" style="display: none;">
+        <div class="sidebar-header">
+            <i class="ph-fill ph-leaf" style="color: var(--primary-light);"></i> Farmmily Admin
+        </div>
+        <div class="sidebar-nav">
+            <div class="nav-item active" data-page="dashboard">
+                <i class="ph ph-squares-four"></i> <span>Dashboard</span>
+            </div>
+            
+            <div class="nav-item has-sub" onclick="toggleSubMenu(this)">
+                <i class="ph ph-package"></i> <span>Products</span> <i class="ph ph-caret-down" style="margin-left:auto;font-size:0.8em;"></i>
+            </div>
+            <div class="sub-nav">
+                <a class="sub-nav-item" data-page="all-products">All Products</a>
+                <a class="sub-nav-item" data-page="add-product">Add Product</a>
+                <a class="sub-nav-item" data-page="categories">Categories</a>
+                <a class="sub-nav-item" data-page="inventory">Inventory</a>
+            </div>
+
+            <div class="nav-item has-sub" onclick="toggleSubMenu(this)">
+                <i class="ph ph-shopping-cart"></i> <span>Orders</span> <i class="ph ph-caret-down" style="margin-left:auto;font-size:0.8em;"></i>
+            </div>
+            <div class="sub-nav">
+                <a class="sub-nav-item" data-page="all-orders">All Orders</a>
+                <a class="sub-nav-item tab-link" data-tab="pending" data-page="all-orders">Pending</a>
+                <a class="sub-nav-item tab-link" data-tab="shipped" data-page="all-orders">Shipped</a>
+                <a class="sub-nav-item tab-link" data-tab="delivered" data-page="all-orders">Delivered</a>
+            </div>
+
+            <div class="nav-item" data-page="customers">
+                <i class="ph ph-users"></i> <span>Customers</span>
+            </div>
+            
+            <div class="nav-item has-sub" onclick="toggleSubMenu(this)">
+                <i class="ph ph-chart-line-up"></i> <span>Reports</span> <i class="ph ph-caret-down" style="margin-left:auto;font-size:0.8em;"></i>
+            </div>
+            <div class="sub-nav">
+                <a class="sub-nav-item" data-page="reports">Sales Report</a>
+                <a class="sub-nav-item" data-page="reports">Product Report</a>
+                <a class="sub-nav-item" data-page="reports">COD Collection</a>
+            </div>
+
+            <div class="nav-item has-sub" onclick="toggleSubMenu(this)">
+                <i class="ph ph-tag"></i> <span>Discounts</span> <i class="ph ph-caret-down" style="margin-left:auto;font-size:0.8em;"></i>
+            </div>
+            <div class="sub-nav">
+                <a class="sub-nav-item" data-page="coupons">All Coupons</a>
+                <a class="sub-nav-item" data-page="coupons" onclick="openModal('couponModal')">Add Coupon</a>
+            </div>
+
+            <div class="nav-item" data-page="banners">
+                <i class="ph ph-image"></i> <span>Banners</span>
+            </div>
+            <div class="nav-item" data-page="settings">
+                <i class="ph ph-gear"></i> <span>Settings</span>
+            </div>
+        </div>
+        <div class="sidebar-footer">
+            <div class="admin-profile">
+                <div class="avatar">A</div>
+                <div>
+                    <div style="font-size: 0.875rem; font-weight: 600;">Admin User</div>
+                    <div style="font-size: 0.75rem; color: #9ca3af;">Superadmin</div>
+                </div>
+            </div>
+            <button class="logout-btn" title="Logout" onclick="handleLogout()"><i class="ph ph-sign-out"></i></button>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="main-wrapper" id="main-wrapper" style="display: none;">
+        <header class="top-header">
+            <div class="header-title">
+                <button class="menu-toggle" onclick="document.getElementById('sidebar').classList.toggle('show')">☰</button>
+                <span id="page-title">Dashboard</span>
+            </div>
+            <div class="header-actions">
+                <div class="notification">
+                    🔔
+                    <div class="notification-dot"></div>
+                </div>
+                <!-- Profile dropdown omitted for brevity -->
+            </div>
+        </header>
+
+        <div class="content-area" id="content-area">
+            
+            <!-- Dashboard Page -->
+            <div id="page-dashboard" class="page active">
+                <div class="grid-cards">
+                    <div class="card stat-card">
+                        <span class="stat-title">Today's Revenue</span>
+                        <span class="stat-value">₹12,480</span>
+                    </div>
+                    <div class="card stat-card">
+                        <span class="stat-title">This Week's Revenue</span>
+                        <span class="stat-value">₹68,240</span>
+                    </div>
+                    <div class="card stat-card">
+                        <span class="stat-title">Orders Today</span>
+                        <span class="stat-value">24</span>
+                    </div>
+                    <div class="card stat-card">
+                        <span class="stat-title">Average Order Value</span>
+                        <span class="stat-value">₹519</span>
+                    </div>
+                </div>
+
+                <h3 style="margin-bottom: 16px;">Order Pipeline</h3>
+                <div class="grid-cards">
+                    <div class="card stat-card orange">
+                        <span class="stat-title">Needs Acceptance</span>
+                        <span class="stat-value">8</span>
+                    </div>
+                    <div class="card stat-card blue">
+                        <span class="stat-title">Ready for Pickup</span>
+                        <span class="stat-value">5</span>
+                    </div>
+                    <div class="card stat-card purple">
+                        <span class="stat-title">Out for Delivery</span>
+                        <span class="stat-value">11</span>
+                    </div>
+                    <div class="card stat-card green">
+                        <span class="stat-title">Completed Today</span>
+                        <span class="stat-value">18</span>
+                    </div>
+                </div>
+
+                <div class="grid-2-col dashboard-grid">
+                    <div class="table-container">
+                        <div class="table-header">
+                            <span class="table-title">Recent Orders</span>
+                            <button class="btn btn-outline" onclick="navigateTo('all-orders')">View All</button>
+                        </div>
+                        <table>
+                            <thead><tr><th>Order ID</th><th>Customer</th><th>Items</th><th>Amount</th><th>Status</th><th>Action</th></tr></thead>
+                            <tbody id="dashboard-recent-orders"></tbody>
+                        </table>
+                    </div>
+
+                    <div style="display: flex; flex-direction: column; gap: 24px;">
+                        <div class="table-container">
+                            <div class="table-header"><span class="table-title">Top Selling Products</span></div>
+                            <table>
+                                <thead><tr><th>Product</th><th>Sales</th></tr></thead>
+                                <tbody id="dashboard-top-products"></tbody>
+                            </table>
+                        </div>
+                        <div class="card stat-card orange" id="low-stock-alert">
+                            <span class="table-title" style="color:var(--warning)">Low Stock Alerts</span>
+                            <div id="dashboard-low-stock" style="margin-top: 10px; font-size: 0.875rem;"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- All Products Page -->
+            <div id="page-all-products" class="page">
+                <div class="table-container">
+                    <div class="table-header">
+                        <div style="display:flex; gap:10px;">
+                            <input type="text" class="form-control" placeholder="Search products..." oninput="filterTable('products-table', this.value)" style="width: 250px;">
+                            <select class="form-control" style="width: auto;">
+                                <option value="">All Categories</option>
+                                <option value="ghee">Ghee & Oils</option>
+                                <option value="honey">Honey & Jaggery</option>
+                            </select>
+                        </div>
+                        <button class="btn btn-primary" onclick="navigateTo('add-product')">+ Add Product</button>
+                    </div>
+                    <table id="products-table">
+                        <thead><tr><th>Image</th><th>Name</th><th>Category</th><th>Price</th><th>Stock</th><th>Status</th><th>Actions</th></tr></thead>
+                        <tbody id="products-tbody"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Add Product Page -->
+            <div id="page-add-product" class="page">
+                <div class="card">
+                    <div class="table-header" style="padding: 0 0 20px 0;">
+                        <span class="table-title">Add New Product</span>
+                    </div>
+                    <form onsubmit="event.preventDefault(); showToast('Product saved successfully'); navigateTo('all-products');">
+                        <div class="grid-2-col">
+                            <div>
+                                <div class="form-group">
+                                    <label class="form-label">Product Name</label>
+                                    <input type="text" class="form-control" required>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Category</label>
+                                    <select class="form-control" required>
+                                        <option>Ghee & Oils</option><option>Honey & Jaggery</option><option>Millets</option><option>Spices</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Description</label>
+                                    <textarea class="form-control"></textarea>
+                                </div>
+                            </div>
+                            <div>
+                                <div class="form-group">
+                                    <label class="form-label">Image URL</label>
+                                    <input type="url" class="form-control" value="https://placehold.co/100" oninput="document.getElementById('img-preview').src = this.value">
+                                    <img id="img-preview" src="https://placehold.co/100" style="margin-top:10px; width:100px; height:100px; border-radius:8px; object-fit:cover;">
+                                </div>
+                                <div class="grid-2-col" style="gap:10px">
+                                    <div class="form-group"><label class="form-label">Price ₹</label><input type="number" class="form-control" required></div>
+                                    <div class="form-group"><label class="form-label">Stock Count</label><input type="number" class="form-control" required></div>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">In Stock</label>
+                                    <label class="switch"><input type="checkbox" checked><span class="slider"></span></label>
+                                </div>
+                            </div>
+                        </div>
+                        <div style="margin-top: 20px; display:flex; justify-content: flex-end; gap: 10px;">
+                            <button type="button" class="btn btn-outline" onclick="navigateTo('all-products')">Cancel</button>
+                            <button type="submit" class="btn btn-primary">Save Product</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Categories Page -->
+            <div id="page-categories" class="page">
+                <div class="table-container">
+                    <div class="table-header">
+                        <span class="table-title">Categories</span>
+                        <button class="btn btn-primary" onclick="openModal('categoryModal')">+ Add Category</button>
+                    </div>
+                    <table>
+                        <thead><tr><th>Name</th><th>Slug</th><th>Products Count</th><th>Actions</th></tr></thead>
+                        <tbody id="categories-tbody"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Inventory Page -->
+            <div id="page-inventory" class="page">
+                <div class="table-container">
+                    <div class="table-header"><span class="table-title">Inventory Management</span></div>
+                    <table>
+                        <thead><tr><th>Product</th><th>Category</th><th>Current Stock</th><th>Status</th><th>Update Stock</th></tr></thead>
+                        <tbody id="inventory-tbody"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- All Orders Page -->
+            <div id="page-all-orders" class="page">
+                <div class="tabs" id="order-tabs">
+                    <div class="tab active" data-filter="all">All</div>
+                    <div class="tab" data-filter="pending">Pending</div>
+                    <div class="tab" data-filter="confirmed">Confirmed</div>
+                    <div class="tab" data-filter="packed">Packed</div>
+                    <div class="tab" data-filter="shipped">Shipped</div>
+                    <div class="tab" data-filter="delivered">Delivered</div>
+                    <div class="tab" data-filter="cancelled">Cancelled</div>
+                </div>
+                <div class="table-container">
+                    <div class="table-header">
+                        <input type="text" class="form-control" placeholder="Search Order ID or Customer..." oninput="filterOrders(this.value)" style="width: 300px;">
+                    </div>
+                    <table id="orders-table">
+                        <thead><tr><th>Order #</th><th>Customer</th><th>Amount</th><th>Payment</th><th>Status</th><th>Date</th><th>Action</th></tr></thead>
+                        <tbody id="orders-tbody"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Customers Page -->
+            <div id="page-customers" class="page">
+                <div class="table-container">
+                    <div class="table-header"><span class="table-title">Customers</span></div>
+                    <table>
+                        <thead><tr><th>Customer</th><th>Email</th><th>Phone</th><th>Orders</th><th>Spent</th><th>Action</th></tr></thead>
+                        <tbody id="customers-tbody"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Reports Page -->
+            <div id="page-reports" class="page">
+                <div class="card">
+                    <div class="table-header" style="padding:0 0 20px 0">
+                        <span class="table-title">Sales Overview (Last 7 Days)</span>
+                        <select class="form-control" style="width:auto"><option>Last 7 Days</option></select>
+                    </div>
+                    <div class="chart-container" id="sales-chart">
+                        <!-- Bars generated via JS -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Coupons Page -->
+            <div id="page-coupons" class="page">
+                <div class="table-container">
+                    <div class="table-header">
+                        <span class="table-title">Discount Coupons</span>
+                        <button class="btn btn-primary" onclick="openModal('couponModal')">+ Add Coupon</button>
+                    </div>
+                    <table>
+                        <thead><tr><th>Code</th><th>Type</th><th>Value</th><th>Min Order</th><th>Uses</th><th>Active</th><th>Actions</th></tr></thead>
+                        <tbody id="coupons-tbody"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Banners & Settings Pages placeholder -->
+            <div id="page-banners" class="page">
+                <div class="grid-cards" id="banners-grid"></div>
+            </div>
+            
+            <div id="page-settings" class="page">
+                <div class="grid-2-col">
+                    <div class="card">
+                        <h3 style="margin-bottom:15px">Store Settings</h3>
+                        <div class="form-group"><label class="form-label">Store Name</label><input type="text" class="form-control" value="Farmmily Farms"></div>
+                        <div class="form-group"><label class="form-label">Support Email</label><input type="email" class="form-control" value="hello@farmmily.com"></div>
+                        <button class="btn btn-primary" onclick="showToast('Settings saved')">Save</button>
+                    </div>
+                    <div class="card">
+                        <h3 style="margin-bottom:15px">Delivery Settings</h3>
+                        <div class="form-group"><label class="form-label">Free Delivery Above ₹</label><input type="number" class="form-control" value="999"></div>
+                        <div class="form-group"><label class="form-label">Flat Delivery Charge ₹</label><input type="number" class="form-control" value="50"></div>
+                        <button class="btn btn-primary" onclick="showToast('Settings saved')">Save</button>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- Modals -->
+    <div class="modal-overlay" id="categoryModal">
+        <div class="modal">
+            <div class="modal-header">
+                <span class="modal-title">Add Category</span>
+                <button class="close-modal" onclick="closeModal('categoryModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group"><label class="form-label">Category Name</label><input type="text" class="form-control"></div>
+                <div class="form-group"><label class="form-label">Image URL</label><input type="text" class="form-control"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline" onclick="closeModal('categoryModal')">Cancel</button>
+                <button class="btn btn-primary" onclick="closeModal('categoryModal'); showToast('Category Added');">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="couponModal">
+        <div class="modal">
+            <div class="modal-header">
+                <span class="modal-title">Add Coupon</span>
+                <button class="close-modal" onclick="closeModal('couponModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group"><label class="form-label">Coupon Code</label><input type="text" class="form-control" placeholder="e.g. SUMMER10" style="text-transform: uppercase;"></div>
+                <div class="grid-2-col">
+                    <div class="form-group"><label class="form-label">Type</label><select class="form-control"><option>Percentage (%)</option><option>Flat (₹)</option></select></div>
+                    <div class="form-group"><label class="form-label">Value</label><input type="number" class="form-control"></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline" onclick="closeModal('couponModal')">Cancel</button>
+                <button class="btn btn-primary" onclick="closeModal('couponModal'); showToast('Coupon Saved');">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="orderModal">
+        <div class="modal">
+            <div class="modal-header">
+                <span class="modal-title" id="om-title">Order Details</span>
+                <button class="close-modal" onclick="closeModal('orderModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <p><strong>Customer:</strong> <span id="om-customer"></span> (<span id="om-phone"></span>)</p>
+                <p><strong>Date:</strong> <span id="om-date"></span></p>
+                <p><strong>Payment:</strong> <span id="om-payment"></span></p>
+                <div style="margin:20px 0; padding:10px; background:#f9fafb; border-radius:8px">
+                    Total Amount: <strong style="font-size:1.2rem" id="om-amount"></strong>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Update Status</label>
+                    <div style="display:flex; gap:10px">
+                        <select class="form-control" id="om-status-select">
+                            <option value="pending">Pending</option>
+                            <option value="confirmed">Confirmed</option>
+                            <option value="packed">Packed</option>
+                            <option value="shipped">Shipped</option>
+                            <option value="delivered">Delivered</option>
+                            <option value="cancelled">Cancelled</option>
+                        </select>
+                        <button class="btn btn-primary" onclick="updateOrderStatus()">Update</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="toast-container" id="toast-container"></div>
+
+    <script src="script.js"></script>
+</body>
+</html>
