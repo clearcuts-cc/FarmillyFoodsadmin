@@ -7,6 +7,7 @@ const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
 let allProducts = [];
 let allCategories = [];
 let allOrders = [];
+let currentOrderFilter = 'all';
 
 // --- Navigation Logic ---
 function navigateTo(pageId) {
@@ -199,7 +200,10 @@ async function renderReviews() {
                 </tr>
             `).join('');
         }
-    } catch(err) { showToast("Error loading reviews", true); }
+    } catch(err) { 
+        showToast("Error loading reviews: " + (err.message || err), true); 
+        console.error(err);
+    }
 }
 
 async function renderProducts() {
@@ -212,7 +216,8 @@ async function renderProducts() {
         if(data.length === 0) showEmpty('products-tbody');
         else buildProductsTable(data);
     } catch(err) {
-        showToast("Error loading products", true);
+        showToast("Error loading products: " + (err.message || err), true);
+        console.error(err);
     }
 }
 
@@ -291,7 +296,8 @@ async function renderCategories() {
             `).join('');
         }
     } catch(err) {
-        showToast("Error loading categories", true);
+        showToast("Error loading categories: " + (err.message || err), true);
+        console.error(err);
     }
 }
 
@@ -348,7 +354,10 @@ async function renderInventory() {
                 </tr>
             `}).join('');
         }
-    } catch(err) { showToast("Error loading inventory", true); }
+    } catch(err) { 
+        showToast("Error loading inventory: " + (err.message || err), true); 
+        console.error(err);
+    }
 }
 
 async function updateStock(id) {
@@ -377,7 +386,7 @@ async function renderOrders(filterText = '') {
         allOrders = (rawOrders || []).map(o => ({ ...o, profile: profilesMap[o.user_id] }));
         
         let filtered = allOrders;
-        if(filterText) {
+        if(filterText && typeof filterText === 'string') {
             const lower = filterText.toLowerCase();
             filtered = filtered.filter(o => (o.order_number && o.order_number.toLowerCase().includes(lower)) || (o.profile?.full_name?.toLowerCase().includes(lower)));
         }
@@ -396,7 +405,10 @@ async function renderOrders(filterText = '') {
                 </tr>
             `).join('');
         }
-    } catch(err) { showToast("Error loading orders data", true); }
+    } catch(err) { 
+        showToast("Error loading orders data: " + (err.message || err), true); 
+        console.error(err);
+    }
 }
 
 async function renderCustomers() {
@@ -427,7 +439,10 @@ async function renderCustomers() {
                 </tr>
             `}).join('');
         }
-    } catch(err) { showToast("Error loading data", true); }
+    } catch(err) { 
+        showToast("Error loading customers data: " + (err.message || err), true); 
+        console.error(err);
+    }
 }
 
 async function renderCoupons() {
@@ -449,7 +464,10 @@ async function renderCoupons() {
                 </tr>
             `).join('');
         }
-    } catch(err) { showToast("Error loading data", true); }
+    } catch(err) { 
+        showToast("Error loading coupons data: " + (err.message || err), true); 
+        console.error(err);
+    }
 }
 
 async function toggleCoupon(id, active) {
@@ -508,7 +526,10 @@ async function renderBanners() {
                 </tr>
             `).join('');
         }
-    } catch(err) { showToast("Error loading data", true); }
+    } catch(err) { 
+        showToast("Error loading banners data: " + (err.message || err), true); 
+        console.error(err);
+    }
 }
 
 async function toggleBanner(id, active) {
@@ -552,8 +573,8 @@ function filterTable(tableId, text) {
     }
 }
 
-function filterOrdersHandler(event) {
-    renderOrders(event.target.value);
+function filterOrders(text) {
+    renderOrders(text);
 }
 
 // Order Tabs
@@ -580,8 +601,8 @@ async function viewOrder(id) {
     if(!o) return;
     activeOrderId = id;
     document.getElementById('om-title').innerText = `Order ${o.order_number || o.id.toString().substring(0,8)}`;
-    document.getElementById('om-customer').innerText = o.profiles?.full_name || 'Guest';
-    document.getElementById('om-phone').innerText = o.profiles?.phone || '-';
+    document.getElementById('om-customer').innerText = o.profile?.full_name || 'Guest';
+    document.getElementById('om-phone').innerText = o.profile?.phone || '-';
     document.getElementById('om-date').innerText = new Date(o.created_at).toLocaleString();
     document.getElementById('om-payment').innerText = o.payment_method || 'N/A';
     document.getElementById('om-amount').innerText = `₹${o.total}`;
