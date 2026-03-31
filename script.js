@@ -79,33 +79,45 @@ async function renderDashboard() {
         const todayStr = new Date().toISOString().split('T')[0];
         
         // Orders
-        const { data: orders, error: oErr } = await supabase
+        const { data: rawOrders, error: oErr } = await supabaseClient
             .from('orders')
-            .select(`*, profiles(full_name, phone)`)
+            .select('*')
             .order('created_at', { ascending: false });
             
         if(oErr) throw oErr;
         
+        // Profiles (to resolve names without hard join)
+        const { data: rawProfiles, error: pErr } = await supabaseClient.from('profiles').select('*');
+        // If profile fetch fails, we can still show orders
+        const profilesMap = (rawProfiles || []).reduce((acc, p) => {
+            acc[p.id] = p;
+            return acc;
+        }, {});
+
         // Products
-        const { data: products, error: pErr } = await supabaseClient.from('products').select('*');
-        if(pErr) throw pErr;
+        const { data: products, error: prodErr } = await supabaseClient.from('products').select('*');
+        if(prodErr) throw prodErr;
 
         // Stats Calc
         let todayOrders = 0;
         let todayRev = 0;
-        let weekRev = 0; // simplified
         let totalRevForAvg = 0;
         let pipeline = { pending: 0, packed: 0, shipped: 0, deliveredToday: 0 };
         
+        const orders = (rawOrders || []).map(o => ({
+            ...o,
+            profile: profilesMap[o.user_id]
+        }));
+
         orders.forEach(o => {
-            const isToday = o.created_at.startsWith(todayStr);
+            const isToday = o.created_at && o.created_at.startsWith(todayStr);
             if(isToday) {
                 todayOrders++;
                 if(o.status === 'delivered') pipeline.deliveredToday++;
             }
             if(o.payment_status === 'paid' || o.payment_status === 'PAID') {
-                totalRevForAvg += o.total;
-                if(isToday) todayRev += o.total;
+                totalRevForAvg += (o.total || 0);
+                if(isToday) todayRev += (o.total || 0);
             }
             if(o.status === 'pending') pipeline.pending++;
             if(o.status === 'packed') pipeline.packed++;
@@ -137,7 +149,7 @@ async function renderDashboard() {
             document.getElementById('dashboard-recent-orders').innerHTML = orders.slice(0,5).map(o => `
                 <tr>
                     <td>${o.order_number || o.id.toString().substring(0,8)}</td>
-                    <td>${o.profiles?.full_name || 'Guest'}</td>
+                    <td>${o.profile?.full_name || 'Guest'}</td>
                     <td>-</td>
                     <td>₹${o.total}</td>
                     <td><span class="badge ${o.status}">${o.status}</span></td>
@@ -165,15 +177,35 @@ async function renderDashboard() {
         `).join('');
 
     } catch(err) {
-        showToast("Error loading dashboard data", true);
+        showToast("Error loading dashboard data: " + (err.message || err), true);
         console.error(err);
     }
+}
+
+async function renderReviews() {
+    showLoading('reviews-tbody');
+    try {
+        const { data, error } = await supabaseClient.from('reviews').select(`*, products(name), profiles(full_name)`);
+        if(error) throw error;
+        if(data.length === 0) showEmpty('reviews-tbody');
+        else {
+            document.getElementById('reviews-tbody').innerHTML = data.map(r => `
+                <tr>
+                    <td><strong>${r.profiles?.full_name || 'Guest'}</strong></td>
+                    <td>${r.products?.name || 'Deleted Product'}</td>
+                    <td><span style="color:#f59e0b">★</span> ${r.rating}</td>
+                    <td>${r.comment}</td>
+                    <td>${new Date(r.created_at).toLocaleDateString()}</td>
+                </tr>
+            `).join('');
+        }
+    } catch(err) { showToast("Error loading reviews", true); }
 }
 
 async function renderProducts() {
     showLoading('products-tbody');
     try {
-        const { data, error } = await supabaseClient.from('products').select(`*, categories(name)`);
+        const { data, error } = await supabaseClient.from('products').select(`*`);
         if(error) throw error;
         allProducts = data || [];
         
@@ -185,11 +217,13 @@ async function renderProducts() {
 }
 
 function buildProductsTable(products) {
-    document.getElementById('products-tbody').innerHTML = products.map(p => `
+    document.getElementById('products-tbody').innerHTML = products.map(p => {
+        const cat = allCategories.find(c => c.id === p.category_id);
+        return `
         <tr>
             <td><img src="${p.image_url || 'https://placehold.co/50'}" class="product-img"></td>
             <td><strong>${p.name}</strong></td>
-            <td>${p.categories?.name || '-'}</td>
+            <td>${cat?.name || '-'}</td>
             <td>₹${p.price}</td>
             <td>${p.stock_count}</td>
             <td>
@@ -203,13 +237,16 @@ function buildProductsTable(products) {
                 <button class="action-btn" title="Delete" onclick="deleteProduct('${p.id}')"><i class="ph ph-trash"></i></button>
             </td>
         </tr>
-    `).join('');
+    `}).join('');
 }
 
 async function toggleProductStock(id, isStock) {
     const { error } = await supabaseClient.from('products').update({ in_stock: isStock }).eq('id', id);
     if(error) showToast("Error updating stock status", true);
-    else showToast("Status updated successfully ✅");
+    else {
+        showToast("Status updated successfully ✅");
+        renderProducts();
+    }
 }
 
 async function deleteProduct(id) {
@@ -265,20 +302,43 @@ async function deleteCategory(id) {
     else { showToast("Deleted successfully ✅"); renderCategories(); }
 }
 
+async function saveCategory() {
+    const form = document.getElementById('category-form');
+    const obj = {
+        name: form.elements['name'].value,
+        slug: form.elements['slug'].value,
+        image_url: form.elements['image_url'].value
+    };
+    if(!obj.name || !obj.slug) { showToast("Name and Slug are required", true); return; }
+    
+    const { error } = await supabaseClient.from('categories').insert([obj]);
+    if(error) showToast("Error saving category", true);
+    else {
+        showToast("Category added successfully ✅");
+        closeModal('categoryModal');
+        renderCategories();
+        loadCategoryOptions();
+    }
+}
+
 async function renderInventory() {
     showLoading('inventory-tbody');
     try {
-        const { data, error } = await supabaseClient.from('products').select(`id, name, stock_count, categories(name)`);
-        if(error) throw error;
-        if(data.length === 0) showEmpty('inventory-tbody');
+        const { data: products, error: pErr } = await supabaseClient.from('products').select(`*`);
+        const { data: categories, error: cErr } = await supabaseClient.from('categories').select('*');
+        if(pErr) throw pErr;
+        
+        const catMap = (categories || []).reduce((acc, c) => { acc[c.id] = c.name; return acc; }, {});
+
+        if(products.length === 0) showEmpty('inventory-tbody');
         else {
-            document.getElementById('inventory-tbody').innerHTML = data.map(p => {
+            document.getElementById('inventory-tbody').innerHTML = products.map(p => {
                 let count = p.stock_count || 0;
                 let status = count > 20 ? 'Good' : (count > 0 ? 'Low' : 'Out');
                 let colorClass = count > 20 ? 'green' : (count > 0 ? 'warning' : 'danger');
                 return `
                 <tr>
-                    <td>${p.name}</td><td>${p.categories?.name || ''}</td>
+                    <td>${p.name}</td><td>${catMap[p.category_id] || ''}</td>
                     <td><strong>${count}</strong></td>
                     <td><span class="badge" style="background:var(--${colorClass});color:white">${status}</span></td>
                     <td style="display:flex;gap:5px">
@@ -295,25 +355,31 @@ async function updateStock(id) {
     const val = document.querySelector(`.stock-input-${id}`).value;
     const { error } = await supabaseClient.from('products').update({ stock_count: parseInt(val) }).eq('id', id);
     if(error) showToast("Error updating, try again", true);
-    else { showToast("Saved successfully ✅"); renderInventory(); }
+    else { 
+        showToast("Saved successfully ✅"); 
+        renderInventory(); 
+        renderDashboard(); // Update low stock alerts too
+    }
 }
 
-let currentOrderFilter = 'all';
 async function renderOrders(filterText = '') {
     showLoading('orders-tbody');
     try {
-        let query = supabaseClient.from('orders').select(`*, profiles(full_name, phone)`).order('created_at', { ascending: false });
+        let query = supabaseClient.from('orders').select(`*`).order('created_at', { ascending: false });
         if(currentOrderFilter !== 'all') query = query.eq('status', currentOrderFilter);
         
-        const { data, error } = await query;
+        const { data: rawOrders, error } = await query;
         if(error) throw error;
         
-        allOrders = data || [];
+        const { data: profiles } = await supabaseClient.from('profiles').select('*');
+        const profilesMap = (profiles || []).reduce((acc, p) => { acc[p.id] = p; return acc; }, {});
+
+        allOrders = (rawOrders || []).map(o => ({ ...o, profile: profilesMap[o.user_id] }));
         
         let filtered = allOrders;
         if(filterText) {
             const lower = filterText.toLowerCase();
-            filtered = filtered.filter(o => (o.order_number && o.order_number.toLowerCase().includes(lower)) || (o.profiles?.full_name?.toLowerCase().includes(lower)));
+            filtered = filtered.filter(o => (o.order_number && o.order_number.toLowerCase().includes(lower)) || (o.profile?.full_name?.toLowerCase().includes(lower)));
         }
 
         if(filtered.length === 0) showEmpty('orders-tbody');
@@ -321,16 +387,16 @@ async function renderOrders(filterText = '') {
             document.getElementById('orders-tbody').innerHTML = filtered.map(o => `
                 <tr>
                     <td>${o.order_number || o.id.toString().substring(0,8)}</td>
-                    <td><div><strong>${o.profiles?.full_name || 'Guest'}</strong><br><small style="color:var(--text-muted)">${o.profiles?.phone || ''}</small></div></td>
+                    <td><div><strong>${o.profile?.full_name || 'Guest'}</strong><br><small style="color:var(--text-muted)">${o.profile?.phone || ''}</small></div></td>
                     <td>₹${o.total}</td>
                     <td>${o.payment_method || 'N/A'}</td>
                     <td><span class="badge ${o.status}">${o.status}</span></td>
-                    <td>${new Date(o.created_at).toLocaleDateString()}</td>
+                    <td>${o.created_at ? new Date(o.created_at).toLocaleDateString() : '-'}</td>
                     <td><button class="btn btn-outline" onclick="viewOrder('${o.id}')">View</button></td>
                 </tr>
             `).join('');
         }
-    } catch(err) { showToast("Error loading data", true); }
+    } catch(err) { showToast("Error loading orders data", true); }
 }
 
 async function renderCustomers() {
@@ -389,7 +455,10 @@ async function renderCoupons() {
 async function toggleCoupon(id, active) {
     const { error } = await supabaseClient.from('coupons').update({ active }).eq('id', id);
     if(error) showToast("Error updating, try again", true);
-    else showToast("Saved successfully ✅");
+    else {
+        showToast("Saved successfully ✅");
+        renderCoupons();
+    }
 }
 
 async function deleteCoupon(id) {
@@ -397,6 +466,26 @@ async function deleteCoupon(id) {
     const { error } = await supabaseClient.from('coupons').delete().eq('id', id);
     if(error) showToast("Error deleting", true);
     else { showToast("Deleted successfully ✅"); renderCoupons(); }
+}
+
+async function saveCoupon() {
+    const form = document.getElementById('coupon-form');
+    const obj = {
+        code: form.elements['code'].value.toUpperCase(),
+        discount_type: form.elements['discount_type'].value,
+        discount_value: parseFloat(form.elements['discount_value'].value),
+        min_order_value: parseFloat(form.elements['min_order_value'].value || 0),
+        active: true
+    };
+    if(!obj.code || !obj.discount_value) { showToast("Code and Value are required", true); return; }
+
+    const { error } = await supabaseClient.from('coupons').insert([obj]);
+    if(error) showToast("Error saving coupon", true);
+    else {
+        showToast("Coupon added successfully ✅");
+        closeModal('couponModal');
+        renderCoupons();
+    }
 }
 
 // Banners (Using ID 'banners-tbody' wherever it's attached)
@@ -425,12 +514,33 @@ async function renderBanners() {
 async function toggleBanner(id, active) {
     await supabaseClient.from('banners').update({ active }).eq('id', id);
     showToast("Saved successfully ✅");
+    renderBanners();
 }
 async function deleteBanner(id) {
     if(!confirm("Are you sure?")) return;
     await supabaseClient.from('banners').delete().eq('id', id);
     showToast("Deleted successfully ✅");
     renderBanners();
+}
+
+async function saveBanner() {
+    const form = document.getElementById('banner-form');
+    const obj = {
+        title: form.elements['title'].value,
+        subtitle: form.elements['subtitle'].value,
+        image_url: form.elements['image_url'].value,
+        sort_order: parseInt(form.elements['sort_order'].value || 1),
+        active: true
+    };
+    if(!obj.title || !obj.image_url) { showToast("Title and Image URL are required", true); return; }
+
+    const { error } = await supabaseClient.from('banners').insert([obj]);
+    if(error) showToast("Error saving banner", true);
+    else {
+        showToast("Banner added successfully ✅");
+        closeModal('bannerModal');
+        renderBanners();
+    }
 }
 
 
@@ -518,18 +628,25 @@ function editProduct(id) {
     if(!p) return;
     editingProductId = id;
     
-    // Assuming you have a form with id 'product-form' in your modal
-    const form = document.getElementById('product-form');
-    if(!form) { showToast("Edit modal not found", true); return; }
+    navigateTo('add-product');
     
-    // Fill form (Assuming inputs have matching names)
+    const form = document.getElementById('product-form');
+    if(!form) return;
+    
     form.elements['name'].value = p.name || '';
     form.elements['category_id'].value = p.category_id || '';
+    form.elements['slug'].value = p.slug || '';
+    form.elements['description'].value = p.description || '';
+    form.elements['image_url'].value = p.image_url || '';
     form.elements['price'].value = p.price || '';
+    form.elements['original_price'].value = p.original_price || '';
     form.elements['stock_count'].value = p.stock_count || 0;
-    
-    document.getElementById('pm-title').innerText = "Edit Product";
-    openModal('productModal');
+    form.elements['weight'].value = p.weight || '';
+    form.elements['in_stock'].checked = p.in_stock;
+
+    document.getElementById('img-preview').src = p.image_url || 'https://placehold.co/100';
+    document.getElementById('pm-title').innerText = "Edit Product: " + p.name;
+    document.getElementById('save-product-btn').innerText = "Update Product";
 }
 
 async function saveProduct(event) {
@@ -539,9 +656,14 @@ async function saveProduct(event) {
     const obj = {
         name: form.elements['name'].value,
         category_id: form.elements['category_id'].value,
+        slug: form.elements['slug'].value,
+        description: form.elements['description'].value,
+        image_url: form.elements['image_url'].value,
         price: parseFloat(form.elements['price'].value),
-        stock_count: parseInt(form.elements['stock_count'].value)
-        // add other fields as necessary based on form
+        original_price: parseFloat(form.elements['original_price'].value || 0),
+        stock_count: parseInt(form.elements['stock_count'].value),
+        weight: form.elements['weight'].value,
+        in_stock: form.elements['in_stock'].checked
     };
 
     let result;
@@ -552,10 +674,13 @@ async function saveProduct(event) {
     }
 
     if(result.error) {
-        showToast("Error saving, try again", true);
+        showToast("Error saving product: " + result.error.message, true);
     } else {
-        showToast("Saved successfully ✅");
-        closeModal('productModal');
+        showToast("Product saved successfully ✅");
+        editingProductId = null;
+        form.reset();
+        document.getElementById('img-preview').src = 'https://placehold.co/100';
+        navigateTo('all-products');
         renderProducts();
         renderInventory();
     }
@@ -571,6 +696,8 @@ document.addEventListener('DOMContentLoaded', () => {
     renderOrders();
     renderCustomers();
     renderCoupons();
+    renderReviews();
+    renderBanners();
     setupChart();
 });
 

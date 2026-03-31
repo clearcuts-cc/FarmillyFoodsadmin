@@ -82,6 +82,9 @@
             <div class="nav-item" data-page="banners">
                 <i class="ph ph-image"></i> <span>Banners</span>
             </div>
+            <div class="nav-item" data-page="reviews">
+                <i class="ph ph-star"></i> <span>Reviews</span>
+            </div>
             <div class="nav-item" data-page="settings">
                 <i class="ph ph-gear"></i> <span>Settings</span>
             </div>
@@ -210,45 +213,53 @@
             <div id="page-add-product" class="page">
                 <div class="card">
                     <div class="table-header" style="padding: 0 0 20px 0;">
-                        <span class="table-title">Add New Product</span>
+                        <span class="table-title" id="pm-title">Add New Product</span>
                     </div>
-                    <form onsubmit="event.preventDefault(); showToast('Product saved successfully'); navigateTo('all-products');">
+                    <form id="product-form" onsubmit="saveProduct(event)">
                         <div class="grid-2-col">
                             <div>
                                 <div class="form-group">
                                     <label class="form-label">Product Name</label>
-                                    <input type="text" class="form-control" required>
+                                    <input type="text" name="name" class="form-control" required>
                                 </div>
                                 <div class="form-group">
                                     <label class="form-label">Category</label>
-                                    <select class="form-control" required>
-                                        <option>Ghee & Oils</option><option>Honey & Jaggery</option><option>Millets</option><option>Spices</option>
+                                    <select name="category_id" class="form-control" required>
+                                        <option value="">Select Category</option>
                                     </select>
                                 </div>
                                 <div class="form-group">
+                                    <label class="form-label">Slug</label>
+                                    <input type="text" name="slug" class="form-control" required placeholder="e.g. raw-honey-500g">
+                                </div>
+                                <div class="form-group">
                                     <label class="form-label">Description</label>
-                                    <textarea class="form-control"></textarea>
+                                    <textarea name="description" class="form-control"></textarea>
                                 </div>
                             </div>
                             <div>
                                 <div class="form-group">
                                     <label class="form-label">Image URL</label>
-                                    <input type="url" class="form-control" value="https://placehold.co/100" oninput="document.getElementById('img-preview').src = this.value">
+                                    <input type="url" name="image_url" class="form-control" value="https://placehold.co/100" oninput="document.getElementById('img-preview').src = this.value">
                                     <img id="img-preview" src="https://placehold.co/100" style="margin-top:10px; width:100px; height:100px; border-radius:8px; object-fit:cover;">
                                 </div>
                                 <div class="grid-2-col" style="gap:10px">
-                                    <div class="form-group"><label class="form-label">Price ₹</label><input type="number" class="form-control" required></div>
-                                    <div class="form-group"><label class="form-label">Stock Count</label><input type="number" class="form-control" required></div>
+                                    <div class="form-group"><label class="form-label">Price ₹</label><input type="number" name="price" class="form-control" required></div>
+                                    <div class="form-group"><label class="form-label">Original Price ₹</label><input type="number" name="original_price" class="form-control"></div>
+                                </div>
+                                <div class="grid-2-col" style="gap:10px">
+                                    <div class="form-group"><label class="form-label">Stock Count</label><input type="number" name="stock_count" class="form-control" required></div>
+                                    <div class="form-group"><label class="form-label">Weight</label><input type="text" name="weight" class="form-control" placeholder="e.g. 500g"></div>
                                 </div>
                                 <div class="form-group">
                                     <label class="form-label">In Stock</label>
-                                    <label class="switch"><input type="checkbox" checked><span class="slider"></span></label>
+                                    <label class="switch"><input type="checkbox" name="in_stock" checked><span class="slider"></span></label>
                                 </div>
                             </div>
                         </div>
                         <div style="margin-top: 20px; display:flex; justify-content: flex-end; gap: 10px;">
                             <button type="button" class="btn btn-outline" onclick="navigateTo('all-products')">Cancel</button>
-                            <button type="submit" class="btn btn-primary">Save Product</button>
+                            <button type="submit" class="btn btn-primary" id="save-product-btn">Save Product</button>
                         </div>
                     </form>
                 </div>
@@ -339,9 +350,29 @@
                 </div>
             </div>
 
-            <!-- Banners & Settings Pages placeholder -->
+            <!-- Banners Page -->
             <div id="page-banners" class="page">
-                <div class="grid-cards" id="banners-grid"></div>
+                <div class="table-container">
+                    <div class="table-header">
+                        <span class="table-title">Home Banners</span>
+                        <button class="btn btn-primary" onclick="openModal('bannerModal')">+ Add Banner</button>
+                    </div>
+                    <table>
+                        <thead><tr><th>Image</th><th>Title</th><th>Sort</th><th>Active</th><th>Actions</th></tr></thead>
+                        <tbody id="banners-tbody"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Reviews Page -->
+            <div id="page-reviews" class="page">
+                <div class="table-container">
+                    <div class="table-header"><span class="table-title">Product Reviews</span></div>
+                    <table>
+                        <thead><tr><th>Customer</th><th>Product</th><th>Rating</th><th>Comment</th><th>Date</th></tr></thead>
+                        <tbody id="reviews-tbody"></tbody>
+                    </table>
+                </div>
             </div>
             
             <div id="page-settings" class="page">
@@ -372,12 +403,15 @@
                 <button class="close-modal" onclick="closeModal('categoryModal')">&times;</button>
             </div>
             <div class="modal-body">
-                <div class="form-group"><label class="form-label">Category Name</label><input type="text" class="form-control"></div>
-                <div class="form-group"><label class="form-label">Image URL</label><input type="text" class="form-control"></div>
+                <form id="category-form">
+                    <div class="form-group"><label class="form-label">Category Name</label><input type="text" name="name" class="form-control" required></div>
+                    <div class="form-group"><label class="form-label">Slug</label><input type="text" name="slug" class="form-control" required placeholder="e.g. ghee-oils"></div>
+                    <div class="form-group"><label class="form-label">Image URL</label><input type="text" name="image_url" class="form-control"></div>
+                </form>
             </div>
             <div class="modal-footer">
                 <button class="btn btn-outline" onclick="closeModal('categoryModal')">Cancel</button>
-                <button class="btn btn-primary" onclick="closeModal('categoryModal'); showToast('Category Added');">Save</button>
+                <button class="btn btn-primary" onclick="saveCategory()">Save</button>
             </div>
         </div>
     </div>
@@ -389,15 +423,18 @@
                 <button class="close-modal" onclick="closeModal('couponModal')">&times;</button>
             </div>
             <div class="modal-body">
-                <div class="form-group"><label class="form-label">Coupon Code</label><input type="text" class="form-control" placeholder="e.g. SUMMER10" style="text-transform: uppercase;"></div>
-                <div class="grid-2-col">
-                    <div class="form-group"><label class="form-label">Type</label><select class="form-control"><option>Percentage (%)</option><option>Flat (₹)</option></select></div>
-                    <div class="form-group"><label class="form-label">Value</label><input type="number" class="form-control"></div>
-                </div>
+                <form id="coupon-form">
+                    <div class="form-group"><label class="form-label">Coupon Code</label><input type="text" name="code" class="form-control" placeholder="e.g. SUMMER10" style="text-transform: uppercase;" required></div>
+                    <div class="grid-2-col">
+                        <div class="form-group"><label class="form-label">Type</label><select name="discount_type" class="form-control"><option value="percentage">Percentage (%)</option><option value="flat">Flat (₹)</option></select></div>
+                        <div class="form-group"><label class="form-label">Value</label><input type="number" name="discount_value" class="form-control" required></div>
+                    </div>
+                    <div class="form-group"><label class="form-label">Min Order Value</label><input type="number" name="min_order_value" class="form-control" value="0"></div>
+                </form>
             </div>
             <div class="modal-footer">
                 <button class="btn btn-outline" onclick="closeModal('couponModal')">Cancel</button>
-                <button class="btn btn-primary" onclick="closeModal('couponModal'); showToast('Coupon Saved');">Save</button>
+                <button class="btn btn-primary" onclick="saveCoupon()">Save</button>
             </div>
         </div>
     </div>
@@ -429,6 +466,28 @@
                         <button class="btn btn-primary" onclick="updateOrderStatus()">Update</button>
                     </div>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Banner Modal -->
+    <div class="modal-overlay" id="bannerModal">
+        <div class="modal">
+            <div class="modal-header">
+                <span class="modal-title">Add Banner</span>
+                <button class="close-modal" onclick="closeModal('bannerModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="banner-form">
+                    <div class="form-group"><label class="form-label">Title</label><input type="text" name="title" class="form-control" required></div>
+                    <div class="form-group"><label class="form-label">Subtitle</label><input type="text" name="subtitle" class="form-control"></div>
+                    <div class="form-group"><label class="form-label">Image URL</label><input type="text" name="image_url" class="form-control" required></div>
+                    <div class="form-group"><label class="form-label">Sort Order</label><input type="number" name="sort_order" class="form-control" value="1"></div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline" onclick="closeModal('bannerModal')">Cancel</button>
+                <button class="btn btn-primary" onclick="saveBanner()">Save</button>
             </div>
         </div>
     </div>
