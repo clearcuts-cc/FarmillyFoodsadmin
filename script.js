@@ -772,6 +772,18 @@ document.addEventListener('DOMContentLoaded', () => {
     renderReviews();
     renderBanners();
     setupChart();
+
+    // Password Toggle Logic
+    const togglePassword = document.getElementById('toggle-password');
+    const passwordInput = document.getElementById('login-password');
+    if (togglePassword && passwordInput) {
+        togglePassword.addEventListener('click', () => {
+            const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
+            passwordInput.setAttribute('type', type);
+            togglePassword.classList.toggle('ph-eye');
+            togglePassword.classList.toggle('ph-eye-slash');
+        });
+    }
 });
 
 // --- Auth Handling ---
