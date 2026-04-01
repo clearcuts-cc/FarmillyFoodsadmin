@@ -311,6 +311,15 @@ async function loadCategoryOptions() {
     }
 }
 
+async function toggleCategoryStatus(id, active) {
+    const { error } = await supabaseClient.from('categories').update({ active }).eq('id', id);
+    if(error) showToast("Error updating category status", true);
+    else {
+        showToast("Category status updated successfully ✅");
+        renderCategories(); // refresh list
+    }
+}
+
 async function renderCategories() {
     showLoading('categories-tbody');
     try {
@@ -323,6 +332,12 @@ async function renderCategories() {
                     <td><strong>${c.name}</strong></td>
                     <td>${c.slug}</td>
                     <td>-</td>
+                    <td>
+                        <label class="switch">
+                            <input type="checkbox" ${c.active !== false ? 'checked' : ''} onchange="toggleCategoryStatus('${c.id}', this.checked)">
+                            <span class="slider"></span>
+                        </label>
+                    </td>
                     <td>
                         <button class="action-btn" title="Delete" onclick="deleteCategory('${c.id}')"><i class="ph ph-trash"></i></button>
                     </td>
@@ -805,12 +820,32 @@ function runAuthCheck() {
 runAuthCheck(); // Run instantly when file is parsed.
 
 function handleLogin() {
-    localStorage.setItem('admin_logged_in', 'true');
-    document.body.classList.remove('show-login');
-    document.getElementById('login-screen').style.display = 'none';
-    document.getElementById('sidebar').style.display = 'flex';
-    document.getElementById('main-wrapper').style.display = 'flex';
-    showToast('Login successful! Welcome Admin.');
+    const emailInput = document.getElementById('login-email');
+    const passwordInput = document.getElementById('login-password');
+    const errorMsg = document.getElementById('login-error-msg');
+    
+    // Reset previous error
+    if(errorMsg) errorMsg.style.display = 'none';
+
+    // Trim values to remove any accidental leading/trailing spaces
+    const enteredEmail = emailInput.value.trim().toLowerCase();
+    const enteredPassword = passwordInput.value.trim();
+    
+    const correctEmail = 'admin@farmmily.com';
+    const correctPassword = 'password123';
+
+    if (enteredEmail === correctEmail && enteredPassword === correctPassword) {
+        localStorage.setItem('admin_logged_in', 'true');
+        document.body.classList.remove('show-login');
+        document.getElementById('login-screen').style.display = 'none';
+        document.getElementById('sidebar').style.display = 'flex';
+        document.getElementById('main-wrapper').style.display = 'flex';
+        showToast('Login successful! Welcome Admin.');
+    } else {
+        if(errorMsg) errorMsg.style.display = 'block';
+        showToast('Access Denied. Check credentials.', true);
+        console.log("Login failed for:", enteredEmail);
+    }
 }
 
 function handleLogout() {

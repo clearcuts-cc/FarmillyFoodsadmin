@@ -26,6 +26,9 @@
                         <i class="ph ph-eye" id="toggle-password" style="position: absolute; right: 15px; top: 50%; transform: translateY(-50%); cursor: pointer; color: var(--text-muted); font-size: 1.2rem;"></i>
                     </div>
                 </div>
+                <div id="login-error-msg" style="color: #ef4444; background: #fee2e2; padding: 10px; border-radius: 8px; font-weight: 600; margin-bottom: 20px; display: none; text-align: center; font-size: 0.9rem;">
+                    <i class="ph ph-warning-circle"></i> Invalid email or password
+                </div>
                 <button type="submit" class="btn btn-primary" style="width: 100%; padding: 12px; font-size: 1rem; justify-content: center;">Login to Dashboard</button>
             </form>
         </div>
@@ -276,7 +279,7 @@
                         <button class="btn btn-primary" onclick="openModal('categoryModal')">+ Add Category</button>
                     </div>
                     <table>
-                        <thead><tr><th>Name</th><th>Slug</th><th>Products Count</th><th>Actions</th></tr></thead>
+                        <thead><tr><th>Name</th><th>Slug</th><th>Products Count</th><th>Active</th><th>Actions</th></tr></thead>
                         <tbody id="categories-tbody"></tbody>
                     </table>
                 </div>
