@@ -245,9 +245,13 @@
                             </div>
                             <div>
                                 <div class="form-group">
-                                    <label class="form-label">Image URL</label>
-                                    <input type="url" name="image_url" class="form-control" value="https://placehold.co/100" oninput="document.getElementById('img-preview').src = this.value">
-                                    <img id="img-preview" src="https://placehold.co/100" style="margin-top:10px; width:100px; height:100px; border-radius:8px; object-fit:cover;">
+                                    <label class="form-label">Product Image</label>
+                                    <div style="display:flex; gap:10px; align-items:center; margin-bottom:10px">
+                                        <input type="url" name="image_url" class="form-control" style="flex:1" placeholder="Paste URL or Upload ->">
+                                        <button type="button" class="btn btn-outline" onclick="document.getElementById('prod-file').click()">Upload</button>
+                                        <input type="file" id="prod-file" style="display:none" accept="image/*" onchange="handleFileUpload(this, 'image_url', 'img-preview')">
+                                    </div>
+                                    <img id="img-preview" src="https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=100" style="width:100px; height:100px; border-radius:8px; object-fit:cover;">
                                 </div>
                                 <div class="grid-2-col" style="gap:10px">
                                     <div class="form-group"><label class="form-label">Price ₹</label><input type="number" name="price" class="form-control" required></div>
@@ -459,9 +463,19 @@
             </div>
             <div class="modal-body">
                 <form id="category-form">
-                    <div class="form-group"><label class="form-label">Category Name</label><input type="text" name="name" class="form-control" required></div>
+                    <div class="form-group"><label class="form-label">Category Name</label><input type="text" name="name" class="form-control" required placeholder="e.g. Organic Ghee"></div>
                     <div class="form-group"><label class="form-label">Slug</label><input type="text" name="slug" class="form-control" required placeholder="e.g. ghee-oils"></div>
-                    <div class="form-group"><label class="form-label">Image URL</label><input type="text" name="image_url" class="form-control"></div>
+                    <div class="form-group">
+                        <label class="form-label">Category Image</label>
+                        <div style="display:flex; gap:10px; align-items:center; margin-bottom:10px">
+                            <input type="text" id="cat-image-url" name="image_url" class="form-control" style="flex:1" placeholder="Paste URL or Upload ->">
+                            <button type="button" class="btn btn-outline" onclick="document.getElementById('cat-file').click()">Upload</button>
+                            <input type="file" id="cat-file" style="display:none" accept="image/*" onchange="handleFileUpload(this, 'cat-image-url', 'cat-img-preview')">
+                        </div>
+                        <div style="text-align:center">
+                            <img id="cat-img-preview" src="https://placehold.co/100" style="width:100px; height:100px; border-radius:8px; object-fit:cover;">
+                        </div>
+                    </div>
                 </form>
             </div>
             <div class="modal-footer">

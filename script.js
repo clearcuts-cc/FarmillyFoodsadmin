@@ -195,17 +195,17 @@ async function renderDashboard() {
         }
 
         // Top Selling Products (dummy calc using stock)
-        const pinterestImgs = [
-            'https://i.pinimg.com/736x/8a/8a/0a/8a8a0a804a8e8f8f8a8a0a804a8e8f8f.jpg', // Organic Honey
-            'https://i.pinimg.com/736x/2b/2b/2b/2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b.jpg', // Natural Ghee
-            'https://i.pinimg.com/736x/5c/5c/5c/5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c.jpg', // Turmeric
-            'https://i.pinimg.com/736x/d4/d4/d4/d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4.jpg'  // Millets
+        const fallbacks = [
+            'https://images.unsplash.com/photo-1587049352846-4a222e784d38?auto=format&fit=crop&q=80&w=100', // Honey
+            'https://images.unsplash.com/photo-1563805042-7684c019e1cb?auto=format&fit=crop&q=80&w=100', // Ghee
+            'https://images.unsplash.com/photo-1615485290382-441e4d019cb5?auto=format&fit=crop&q=80&w=100', // Turmeric
+            'https://images.unsplash.com/photo-1586201375761-83865001e31c?auto=format&fit=crop&q=80&w=100'  // Millets
         ];
         
         document.getElementById('dashboard-top-products').innerHTML = products.slice(0,4).map((p, idx) => `
             <tr>
                 <td style="display:flex;align-items:center;gap:10px">
-                    <img src="${p.image_url || pinterestImgs[idx % 4]}" class="product-img"> <span>${p.name}</span>
+                    <img src="${p.image_url || fallbacks[idx % 4]}" class="product-img"> <span>${p.name}</span>
                 </td>
                 <td>${p.stock_count || 0} stock</td>
             </tr>
@@ -339,7 +339,7 @@ function buildProductsTable(products) {
         const cat = allCategories.find(c => c.id === p.category_id);
         return `
         <tr>
-            <td><img src="${p.image_url || 'https://placehold.co/50'}" class="product-img"></td>
+            <td><img src="${p.image_url || 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=100'}" class="product-img"></td>
             <td><strong>${p.name}</strong></td>
             <td>${cat?.name || '-'}</td>
             <td>₹${p.price}</td>
@@ -441,7 +441,7 @@ async function saveCategory() {
     const obj = {
         name: form.elements['name'].value,
         slug: form.elements['slug'].value,
-        image_url: form.elements['image_url'].value
+        image_url: document.getElementById('cat-image-url').value
     };
     if(!obj.name || !obj.slug) { showToast("Name and Slug are required", true); return; }
     
@@ -902,6 +902,37 @@ document.addEventListener('DOMContentLoaded', () => {
     renderBanners();
     setupChart();
 
+    // Live Image Previews with Google Drive conversion
+    function getDirectLink(url) {
+        if(url.includes('drive.google.com')) {
+            const id = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
+            if(id && id[1]) return `https://lh3.googleusercontent.com/u/0/d/${id[1]}`;
+        }
+        return url;
+    }
+
+    const prodImgInput = document.querySelector('input[name="image_url"]');
+    const prodImgPreview = document.getElementById('img-preview');
+    if(prodImgInput && prodImgPreview) {
+        prodImgInput.addEventListener('input', (e) => {
+            const rawUrl = e.target.value.trim();
+            const directUrl = getDirectLink(rawUrl);
+            if(rawUrl !== directUrl) e.target.value = directUrl; // Auto-convert the input too
+            prodImgPreview.src = directUrl || 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=100';
+        });
+    }
+
+    const catImgInput = document.getElementById('cat-image-url');
+    const catImgPreview = document.getElementById('cat-img-preview');
+    if(catImgInput && catImgPreview) {
+        catImgInput.addEventListener('input', (e) => {
+            const rawUrl = e.target.value.trim();
+            const directUrl = getDirectLink(rawUrl);
+            if(rawUrl !== directUrl) e.target.value = directUrl; // Auto-convert the input too
+            catImgPreview.src = directUrl || 'https://placehold.co/100';
+        });
+    }
+
     // Password Toggle Logic
     const togglePassword = document.getElementById('toggle-password');
     const passwordInput = document.getElementById('login-password');
@@ -1038,4 +1069,58 @@ if(reviewForm) {
             renderReviews();
         }
     });
+}
+
+// --- Image Upload & Compression ---
+function handleFileUpload(input, targetInputNameOrId, previewId) {
+    const file = input.files[0];
+    if(!file) return;
+    
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+            // Compress using Canvas
+            const canvas = document.createElement('canvas');
+            const MAX_WIDTH = 600;
+            const MAX_HEIGHT = 600;
+            let width = img.width;
+            let height = img.height;
+
+            if (width > height) {
+                if (width > MAX_WIDTH) {
+                    height *= MAX_WIDTH / width;
+                    width = MAX_WIDTH;
+                }
+            } else {
+                if (height > MAX_HEIGHT) {
+                    width *= MAX_HEIGHT / height;
+                    height = MAX_HEIGHT;
+                }
+            }
+
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, width, height);
+
+            // Get compressed Base64
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.8); // 80% quality
+            
+            // Update inputs
+            const target = document.querySelector(`input[name="${targetInputNameOrId}"]`) || document.getElementById(targetInputNameOrId);
+            if(target) {
+                target.value = dataUrl;
+                // Dispatch input event to trigger any listeners (like the preview one)
+                target.dispatchEvent(new Event('input'));
+            }
+            
+            const preview = document.getElementById(previewId);
+            if(preview) preview.src = dataUrl;
+            
+            showToast("Image compressed and loaded 🚀");
+        };
+        img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
 }
