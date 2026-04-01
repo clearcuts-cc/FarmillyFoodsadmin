@@ -60,6 +60,40 @@ function showToast(msg, isError = false) {
     }, 3000);
 }
 
+function showConfirm(title, msg, btnText = "Continue", btnColor = "var(--primary)") {
+    return new Promise((resolve) => {
+        const modal = document.getElementById('confirmModal');
+        const titleEl = document.getElementById('confirm-title');
+        const msgEl = document.getElementById('confirm-msg');
+        const okBtn = document.getElementById('confirm-ok-btn');
+        const cancelBtn = document.getElementById('confirm-cancel-btn');
+
+        titleEl.innerText = title;
+        msgEl.innerText = msg;
+        okBtn.innerText = btnText;
+        okBtn.style.background = btnColor;
+
+        const onOk = () => {
+            modal.classList.remove('active');
+            cleanup();
+            resolve(true);
+        };
+        const onCancel = () => {
+            modal.classList.remove('active');
+            cleanup();
+            resolve(false);
+        };
+        const cleanup = () => {
+            okBtn.removeEventListener('click', onOk);
+            cancelBtn.removeEventListener('click', onCancel);
+        };
+
+        okBtn.addEventListener('click', onOk);
+        cancelBtn.addEventListener('click', onCancel);
+        modal.classList.add('active');
+    });
+}
+
 function showLoading(elementId) {
     const el = document.getElementById(elementId);
     if(el) el.innerHTML = `<tr><td colspan="10" style="text-align:center;padding:20px;">Loading...</td></tr>`;
@@ -255,7 +289,7 @@ async function toggleProductStock(id, isStock) {
 }
 
 async function deleteProduct(id) {
-    if(!confirm("Are you sure you want to delete this product?")) return;
+    if(!await showConfirm("Delete Product?", "Are you sure you want to permanently delete this product?", "Delete", "#ef4444")) return;
     const { error } = await supabaseClient.from('products').delete().eq('id', id);
     if(error) showToast("Error deleting product", true);
     else {
@@ -302,7 +336,7 @@ async function renderCategories() {
 }
 
 async function deleteCategory(id) {
-    if(!confirm("Are you sure?")) return;
+    if(!await showConfirm("Delete Category?", "Permanently delete this category?", "Delete", "#ef4444")) return;
     const { error } = await supabaseClient.from('categories').delete().eq('id', id);
     if(error) showToast("Error deleting category", true);
     else { showToast("Deleted successfully ✅"); renderCategories(); }
@@ -480,7 +514,7 @@ async function toggleCoupon(id, active) {
 }
 
 async function deleteCoupon(id) {
-    if(!confirm("Are you sure?")) return;
+    if(!await showConfirm("Delete Coupon?", "Are you sure you want to delete this coupon code?", "Delete", "#ef4444")) return;
     const { error } = await supabaseClient.from('coupons').delete().eq('id', id);
     if(error) showToast("Error deleting", true);
     else { showToast("Deleted successfully ✅"); renderCoupons(); }
@@ -538,7 +572,7 @@ async function toggleBanner(id, active) {
     renderBanners();
 }
 async function deleteBanner(id) {
-    if(!confirm("Are you sure?")) return;
+    if(!await showConfirm("Delete Banner?", "Delete this promotional banner?", "Delete", "#ef4444")) return;
     await supabaseClient.from('banners').delete().eq('id', id);
     showToast("Deleted successfully ✅");
     renderBanners();
