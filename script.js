@@ -631,7 +631,7 @@ document.querySelectorAll('.tab-link').forEach(link => {
 
 let activeOrderId = null;
 async function viewOrder(id) {
-    const o = allOrders.find(x => x.id === id);
+    const o = allOrders.find(x => x.id == id);
     if(!o) return;
     activeOrderId = id;
     document.getElementById('om-title').innerText = `Order ${o.order_number || o.id.toString().substring(0,8)}`;
@@ -692,7 +692,7 @@ function resetProductForm() {
 }
 
 async function editProduct(id) {
-    const p = allProducts.find(x => x.id === id);
+    const p = allProducts.find(x => x.id == id);
     if(!p) { showToast('Product not found. Please refresh the page.', true); return; }
     editingProductId = id;
 
