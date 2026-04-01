@@ -644,18 +644,33 @@ function setupChart() {
 
 // --- Add/Edit Product Logic ---
 let editingProductId = null;
-function editProduct(id) {
+
+function resetProductForm() {
+    editingProductId = null;
+    const form = document.getElementById('product-form');
+    if(form) form.reset();
+    const preview = document.getElementById('img-preview');
+    if(preview) preview.src = 'https://placehold.co/100';
+    const title = document.getElementById('pm-title');
+    if(title) title.innerText = 'Add New Product';
+    const btn = document.getElementById('save-product-btn');
+    if(btn) btn.innerText = 'Save Product';
+}
+
+async function editProduct(id) {
     const p = allProducts.find(x => x.id === id);
-    if(!p) return;
+    if(!p) { showToast('Product not found. Please refresh the page.', true); return; }
     editingProductId = id;
-    
+
     navigateTo('add-product');
-    
+
     const form = document.getElementById('product-form');
     if(!form) return;
-    
+
+    // Ensure categories are loaded into the dropdown BEFORE setting value
+    await loadCategoryOptions();
+
     form.elements['name'].value = p.name || '';
-    form.elements['category_id'].value = p.category_id || '';
     form.elements['slug'].value = p.slug || '';
     form.elements['description'].value = p.description || '';
     form.elements['image_url'].value = p.image_url || '';
@@ -663,11 +678,16 @@ function editProduct(id) {
     form.elements['original_price'].value = p.original_price || '';
     form.elements['stock_count'].value = p.stock_count || 0;
     form.elements['weight'].value = p.weight || '';
-    form.elements['in_stock'].checked = p.in_stock;
+    form.elements['in_stock'].checked = !!p.in_stock;
 
-    document.getElementById('img-preview').src = p.image_url || 'https://placehold.co/100';
-    document.getElementById('pm-title').innerText = "Edit Product: " + p.name;
-    document.getElementById('save-product-btn').innerText = "Update Product";
+    // Set category after options are populated
+    form.elements['category_id'].value = p.category_id || '';
+
+    const preview = document.getElementById('img-preview');
+    if(preview) preview.src = p.image_url || 'https://placehold.co/100';
+
+    document.getElementById('pm-title').innerText = 'Edit Product: ' + p.name;
+    document.getElementById('save-product-btn').innerText = 'Update Product';
 }
 
 async function saveProduct(event) {
@@ -698,9 +718,7 @@ async function saveProduct(event) {
         showToast("Error saving product: " + result.error.message, true);
     } else {
         showToast("Product saved successfully ✅");
-        editingProductId = null;
-        form.reset();
-        document.getElementById('img-preview').src = 'https://placehold.co/100';
+        resetProductForm();
         navigateTo('all-products');
         renderProducts();
         renderInventory();

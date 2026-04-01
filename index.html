@@ -200,7 +200,7 @@
                                 <option value="honey">Honey & Jaggery</option>
                             </select>
                         </div>
-                        <button class="btn btn-primary" onclick="navigateTo('add-product')">+ Add Product</button>
+                        <button class="btn btn-primary" onclick="resetProductForm(); navigateTo('add-product')">+ Add Product</button>
                     </div>
                     <table id="products-table">
                         <thead><tr><th>Image</th><th>Name</th><th>Category</th><th>Price</th><th>Stock</th><th>Status</th><th>Actions</th></tr></thead>
@@ -258,7 +258,7 @@
                             </div>
                         </div>
                         <div style="margin-top: 20px; display:flex; justify-content: flex-end; gap: 10px;">
-                            <button type="button" class="btn btn-outline" onclick="navigateTo('all-products')">Cancel</button>
+                            <button type="button" class="btn btn-outline" onclick="resetProductForm(); navigateTo('all-products')">Cancel</button>
                             <button type="submit" class="btn btn-primary" id="save-product-btn">Save Product</button>
                         </div>
                     </form>
