@@ -139,10 +139,11 @@ async function renderDashboard() {
         let totalRevForAvg = 0;
         let pipeline = { pending: 0, packed: 0, shipped: 0, deliveredToday: 0 };
         
-        const orders = (rawOrders || []).map(o => ({
+        allOrders = (rawOrders || []).map(o => ({
             ...o,
             profile: profilesMap[o.user_id]
         }));
+        const orders = allOrders;
 
         orders.forEach(o => {
             const isToday = o.created_at && o.created_at.startsWith(todayStr);
@@ -194,10 +195,17 @@ async function renderDashboard() {
         }
 
         // Top Selling Products (dummy calc using stock)
-        document.getElementById('dashboard-top-products').innerHTML = products.slice(0,4).map(p => `
+        const pinterestImgs = [
+            'https://i.pinimg.com/736x/8a/8a/0a/8a8a0a804a8e8f8f8a8a0a804a8e8f8f.jpg', // Organic Honey
+            'https://i.pinimg.com/736x/2b/2b/2b/2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b2b.jpg', // Natural Ghee
+            'https://i.pinimg.com/736x/5c/5c/5c/5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c.jpg', // Turmeric
+            'https://i.pinimg.com/736x/d4/d4/d4/d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4.jpg'  // Millets
+        ];
+        
+        document.getElementById('dashboard-top-products').innerHTML = products.slice(0,4).map((p, idx) => `
             <tr>
                 <td style="display:flex;align-items:center;gap:10px">
-                    <img src="${p.image_url || 'https://placehold.co/50'}" class="product-img"> <span>${p.name}</span>
+                    <img src="${p.image_url || pinterestImgs[idx % 4]}" class="product-img"> <span>${p.name}</span>
                 </td>
                 <td>${p.stock_count || 0} stock</td>
             </tr>
@@ -217,6 +225,71 @@ async function renderDashboard() {
     }
 }
 
+async function renderReports() {
+    setupChart();
+    renderProductReport();
+    renderCODReport();
+}
+
+function switchReport(type) {
+    document.querySelectorAll('.report-tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.report-section').forEach(s => s.style.display = 'none');
+    
+    document.querySelector(`[onclick="switchReport('${type}')"]`).classList.add('active');
+    document.getElementById(`report-${type}`).style.display = 'block';
+}
+
+async function renderProductReport() {
+    const el = document.getElementById('product-report-tbody');
+    if(!el) return;
+    showLoading('product-report-tbody');
+    try {
+        const { data: items, error } = await supabaseClient.from('order_items').select('*');
+        if(error) throw error;
+        
+        const summary = (items || []).reduce((acc, item) => {
+            const name = item.product_name;
+            if(!acc[name]) acc[name] = { sales: 0, revenue: 0 };
+            acc[name].sales += (item.quantity || 0);
+            acc[name].revenue += (parseFloat(item.total_price) || 0);
+            return acc;
+        }, {});
+
+        const sorted = Object.entries(summary).sort((a,b) => b[1].revenue - a[1].revenue);
+        
+        if(sorted.length === 0) showEmpty('product-report-tbody');
+        else {
+            el.innerHTML = sorted.map(([name, vals]) => `
+                <tr>
+                    <td><strong>${name}</strong></td>
+                    <td>Organic</td>
+                    <td>${vals.sales} Units</td>
+                    <td>₹${vals.revenue.toLocaleString()}</td>
+                </tr>
+            `).join('');
+        }
+    } catch(err) { console.error(err); }
+}
+
+async function renderCODReport() {
+    const el = document.getElementById('cod-report-tbody');
+    if(!el) return;
+    
+    const codOrders = allOrders.filter(o => (o.payment_method || '').toLowerCase() === 'cod');
+    
+    if(codOrders.length === 0) showEmpty('cod-report-tbody');
+    else {
+        el.innerHTML = codOrders.map(o => `
+            <tr>
+                <td>${o.order_number || o.id.toString().substring(0,8)}</td>
+                <td>${o.profile?.full_name || 'Guest'}</td>
+                <td><span class="badge ${o.status}">${o.status}</span></td>
+                <td>₹${o.total}</td>
+            </tr>
+        `).join('');
+    }
+}
+
 async function renderReviews() {
     showLoading('reviews-tbody');
     try {
@@ -226,11 +299,17 @@ async function renderReviews() {
         else {
             document.getElementById('reviews-tbody').innerHTML = data.map(r => `
                 <tr>
-                    <td><strong>${r.profiles?.full_name || 'Guest'}</strong></td>
+                    <td><strong>${r.profiles?.full_name || r.customer_name || 'Guest'}</strong></td>
                     <td>${r.products?.name || 'Deleted Product'}</td>
                     <td><span style="color:#f59e0b">★</span> ${r.rating}</td>
                     <td>${r.comment}</td>
                     <td>${new Date(r.created_at).toLocaleDateString()}</td>
+                    <td>
+                        <div style="display:flex;gap:5px">
+                            <button class="action-btn" title="Edit" onclick="editReview('${r.id}')"><i class="ph ph-note-pencil"></i></button>
+                            <button class="action-btn" title="Delete" onclick="deleteReview('${r.id}')"><i class="ph ph-trash"></i></button>
+                        </div>
+                    </td>
                 </tr>
             `).join('');
         }
@@ -683,12 +762,47 @@ async function updateOrderStatus() {
 }
 
 function setupChart() {
-    const chart = document.getElementById('sales-chart');
+    const chart = document.getElementById('salesChart');
     if(!chart) return;
-    const data = [12, 19, 8, 15, 22, 14, 25]; // heights in %
-    chart.innerHTML = data.map(val => `
-        <div class="bar" style="height: ${val * 3}%"><span>₹${val}k</span></div>
-    `).join('');
+    
+    // Calculate last 7 days sales from real orders
+    const dayTotals = new Array(7).fill(0);
+    const dayNames = [];
+    const today = new Date();
+    
+    for (let i = 6; i >= 0; i--) {
+        const d = new Date();
+        d.setDate(today.getDate() - i);
+        d.setHours(0,0,0,0);
+        
+        const dayStr = d.toLocaleDateString('en-IN', { weekday: 'short' });
+        dayNames.push(dayStr);
+        
+        // Sum orders for this day (exclude cancelled)
+        const daySum = allOrders.reduce((sum, order) => {
+            const orderDate = new Date(order.created_at);
+            orderDate.setHours(0,0,0,0);
+            if (orderDate.getTime() === d.getTime() && order.status !== 'cancelled') {
+                return sum + (parseFloat(order.total) || 0);
+            }
+            return sum;
+        }, 0);
+        
+        dayTotals[6-i] = daySum;
+    }
+
+    const maxVal = Math.max(...dayTotals, 1000); // at least 1k for scale
+    
+    chart.innerHTML = dayTotals.map((val, i) => {
+        const height = (val / maxVal) * 80; // max 80% height
+        const displayVal = val >= 1000 ? (val/1000).toFixed(1) + 'k' : val;
+        return `
+            <div class="bar" style="height: ${height + 10}%">
+                <span>₹${displayVal}</span>
+                <small style="position:absolute; bottom:-25px; font-size:10px; color:var(--text-muted); width:100%; text-align:center">${dayNames[i]}</small>
+            </div>
+        `;
+    }).join('');
 }
 
 // --- Add/Edit Product Logic ---
@@ -855,4 +969,73 @@ function handleLogout() {
     document.getElementById('sidebar').style.display = 'none';
     document.getElementById('main-wrapper').style.display = 'none';
     showToast('Logged out successfully.');
+}
+
+// --- Reviews CRUD ---
+function openReviewModal() {
+    document.getElementById('reviewModalTitle').innerText = 'Add New Review';
+    const form = document.getElementById('review-form');
+    form.reset();
+    document.getElementById('edit-review-id').value = '';
+    
+    // Populate products select
+    const sel = document.getElementById('review-product-select');
+    if(sel) {
+        sel.innerHTML = allProducts.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+    }
+    
+    openModal('reviewModal');
+}
+
+async function editReview(id) {
+    const { data, error } = await supabaseClient.from('reviews').select('*').eq('id', id).single();
+    if(error || !data) { showToast("Error loading review", true); return; }
+    
+    document.getElementById('reviewModalTitle').innerText = 'Edit Review';
+    const form = document.getElementById('review-form');
+    document.getElementById('edit-review-id').value = id;
+    
+    form.elements['customer_name'].value = data.customer_name || '';
+    form.elements['rating'].value = data.rating;
+    form.elements['comment'].value = data.comment;
+    
+    // Populate products and select current
+    const sel = document.getElementById('review-product-select');
+    if(sel) {
+        sel.innerHTML = allProducts.map(p => `<option value="${p.id}" ${p.id == data.product_id ? 'selected' : ''}>${p.name}</option>`).join('');
+    }
+    
+    openModal('reviewModal');
+}
+
+async function deleteReview(id) {
+    if(!await showConfirm("Delete Review?", "Are you sure? This will remove the feedback from your site.", "Delete", "#ef4444")) return;
+    const { error } = await supabaseClient.from('reviews').delete().eq('id', id);
+    if(error) showToast("Error deleting", true);
+    else { showToast("Review deleted 🗑️"); renderReviews(); }
+}
+
+const reviewForm = document.getElementById('review-form');
+if(reviewForm) {
+    reviewForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const id = document.getElementById('edit-review-id').value;
+        const obj = {
+            customer_name: reviewForm.elements['customer_name'].value,
+            product_id: parseInt(reviewForm.elements['product_id'].value),
+            rating: parseInt(reviewForm.elements['rating'].value),
+            comment: reviewForm.elements['comment'].value,
+        };
+        
+        let res;
+        if(id) res = await supabaseClient.from('reviews').update(obj).eq('id', id);
+        else res = await supabaseClient.from('reviews').insert([obj]);
+        
+        if(res.error) showToast("Error saving review: " + res.error.message, true);
+        else {
+            showToast("Review saved successfully ✅");
+            closeModal('reviewModal');
+            renderReviews();
+        }
+    });
 }

@@ -372,15 +372,64 @@
 
             <!-- Reviews Page -->
             <div id="page-reviews" class="page">
-                <div class="table-container">
-                    <div class="table-header"><span class="table-title">Product Reviews</span></div>
-                    <table>
-                        <thead><tr><th>Customer</th><th>Product</th><th>Rating</th><th>Comment</th><th>Date</th></tr></thead>
-                        <tbody id="reviews-tbody"></tbody>
-                    </table>
+                <div class="page-header" style="justify-content:space-between">
+                    <h1>Customer Reviews</h1>
+                    <button class="btn btn-primary" onclick="openReviewModal()">+ Add Review</button>
+                </div>
+
+                <div class="table-card">
+                    <div class="table-container">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Customer</th><th>Product</th><th>Rating</th><th>Comment</th><th>Date</th><th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="reviews-tbody"></tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
             
+            <!-- Review Modal -->
+            <div id="reviewModal" class="modal-overlay">
+                <div class="modal">
+                    <div class="modal-header">
+                        <h2 id="reviewModalTitle">Add New Review</h2>
+                        <button class="close-modal" onclick="closeModal('reviewModal')">&times;</button>
+                    </div>
+                    <form id="review-form">
+                        <input type="hidden" id="edit-review-id">
+                        <div class="form-group">
+                            <label>Customer Name</label>
+                            <input type="text" name="customer_name" class="form-control" placeholder="Priya Sharma" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Product</label>
+                            <select name="product_id" id="review-product-select" class="form-control" required></select>
+                        </div>
+                        <div class="form-group">
+                            <label>Rating (1-5)</label>
+                            <select name="rating" class="form-control">
+                                <option value="5">5 Stars</option>
+                                <option value="4">4 Stars</option>
+                                <option value="3">3 Stars</option>
+                                <option value="2">2 Stars</option>
+                                <option value="1">1 Star</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Comment</label>
+                            <textarea name="comment" class="form-control" rows="4" required></textarea>
+                        </div>
+                        <div class="modal-footer" style="padding-top:10px">
+                            <button type="button" class="btn btn-outline" onclick="closeModal('reviewModal')">Cancel</button>
+                            <button type="submit" class="btn btn-primary">Save Review</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
             <div id="page-settings" class="page">
                 <div class="grid-2-col">
                     <div class="card">
