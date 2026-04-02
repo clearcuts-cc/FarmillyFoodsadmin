@@ -226,7 +226,7 @@
                             <div>
                                 <div class="form-group">
                                     <label class="form-label">Product Name</label>
-                                    <input type="text" name="name" class="form-control" required>
+                                    <input type="text" name="name" id="product-name-input" class="form-control" required placeholder="e.g. Raw Forest Honey">
                                 </div>
                                 <div class="form-group">
                                     <label class="form-label">Category</label>
@@ -342,6 +342,24 @@
                     </div>
                     <div class="chart-container" id="sales-chart">
                         <!-- Bars generated via JS -->
+                    </div>
+                </div>
+
+                <div class="grid-2-col dashboard-grid" style="margin-top:24px">
+                    <div class="table-container">
+                        <div class="table-header"><span class="table-title">Product Performance</span></div>
+                        <table>
+                            <thead><tr><th>Product</th><th>Type</th><th>Sales</th><th>Revenue</th></tr></thead>
+                            <tbody id="product-report-tbody"></tbody>
+                        </table>
+                    </div>
+
+                    <div class="table-container">
+                        <div class="table-header"><span class="table-title">COD Collection Tracking</span></div>
+                        <table>
+                            <thead><tr><th>Order #</th><th>Customer</th><th>Status</th><th>Amount</th></tr></thead>
+                            <tbody id="cod-report-tbody"></tbody>
+                        </table>
                     </div>
                 </div>
             </div>
@@ -562,17 +580,15 @@
     </div>
 
     <div class="modal-overlay" id="confirmModal">
-        <div class="modal" style="max-width: 400px; text-align: center;">
-            <div class="modal-body" style="padding-top: 40px;">
-                <div style="font-size: 3rem; color: #f59e0b; margin-bottom: 20px;">
-                    <i class="ph-fill ph-warning-circle"></i>
-                </div>
-                <h3 id="confirm-title" style="margin-bottom: 12px; font-size: 1.5rem;">Are you sure?</h3>
-                <p id="confirm-msg" style="color: var(--text-muted); line-height: 1.5;">This action cannot be undone.</p>
+        <div class="modal">
+            <div class="confirm-icon-wrapper">
+                <i class="ph-fill ph-warning-circle"></i>
             </div>
-            <div class="modal-footer" style="justify-content: center; border-top: none; padding-bottom: 40px;">
+            <h3 id="confirm-title">Are you sure?</h3>
+            <p id="confirm-msg">This action cannot be undone and may affect related data.</p>
+            <div class="confirm-actions">
                 <button class="btn btn-outline" id="confirm-cancel-btn">Cancel</button>
-                <button class="btn btn-primary" id="confirm-ok-btn" style="background: #ef4444;">Delete</button>
+                <button class="btn btn-primary" id="confirm-ok-btn">Confirm</button>
             </div>
         </div>
     </div>

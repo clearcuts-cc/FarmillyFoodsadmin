@@ -45,19 +45,23 @@ function openModal(id) { document.getElementById(id).classList.add('active'); }
 function closeModal(id) { document.getElementById(id).classList.remove('active'); }
 
 // --- UI Helpers ---
-function showToast(msg, isError = false) {
+function showToast(msg, type = 'success') {
     const container = document.getElementById('toast-container');
     const toast = document.createElement('div');
-    toast.className = 'toast';
-    toast.style.borderLeft = isError ? '4px solid #ef4444' : '4px solid var(--primary)';
-    toast.innerHTML = isError ? 
-        `<i class="ph-fill ph-warning-circle" style="color:#ef4444;font-size:1.2rem;"></i> <span>${msg}</span>` :
-        `<i class="ph-fill ph-check-circle" style="color:var(--success-text);font-size:1.2rem;"></i> <span>${msg}</span>`;
+    toast.className = `toast toast-${type}`;
+    
+    let icon = 'ph-check-circle';
+    if(type === 'error') icon = 'ph-warning-circle';
+    if(type === 'warning') icon = 'ph-warning';
+
+    toast.innerHTML = `<i class="ph-fill ${icon}"></i> <span>${msg}</span>`;
     container.appendChild(toast);
+    
     setTimeout(() => {
         toast.style.opacity = '0';
+        toast.style.transform = 'translateX(20px)';
         setTimeout(() => toast.remove(), 300);
-    }, 3000);
+    }, 4000);
 }
 
 function showConfirm(title, msg, btnText = "Continue", btnColor = "var(--primary)") {
@@ -67,11 +71,21 @@ function showConfirm(title, msg, btnText = "Continue", btnColor = "var(--primary
         const msgEl = document.getElementById('confirm-msg');
         const okBtn = document.getElementById('confirm-ok-btn');
         const cancelBtn = document.getElementById('confirm-cancel-btn');
+        const iconWrapper = modal.querySelector('.confirm-icon-wrapper');
 
         titleEl.innerText = title;
         msgEl.innerText = msg;
         okBtn.innerText = btnText;
         okBtn.style.background = btnColor;
+        
+        // Dynamic icon color based on button color
+        if(btnColor === '#ef4444' || btnColor === 'red') {
+            iconWrapper.style.color = '#ef4444';
+            iconWrapper.style.background = '#fee2e2';
+        } else {
+            iconWrapper.style.color = '#f59e0b';
+            iconWrapper.style.background = '#fff7ed';
+        }
 
         const onOk = () => {
             modal.classList.remove('active');
@@ -146,18 +160,23 @@ async function renderDashboard() {
         const orders = allOrders;
 
         orders.forEach(o => {
+            const status = (o.status || '').toLowerCase();
             const isToday = o.created_at && o.created_at.startsWith(todayStr);
+            
             if(isToday) {
                 todayOrders++;
-                if(o.status === 'delivered') pipeline.deliveredToday++;
+                if(status === 'delivered') pipeline.deliveredToday++;
             }
-            if(o.payment_status === 'paid' || o.payment_status === 'PAID') {
+
+            if((o.payment_status || '').toLowerCase() === 'paid') {
                 totalRevForAvg += (o.total || 0);
                 if(isToday) todayRev += (o.total || 0);
             }
-            if(o.status === 'pending') pipeline.pending++;
-            if(o.status === 'packed') pipeline.packed++;
-            if(o.status === 'shipped') pipeline.shipped++;
+
+            // Map statuses to pipeline categories
+            if(status === 'pending' || status === 'confirmed') pipeline.pending++;
+            if(status === 'packed') pipeline.packed++;
+            if(status === 'shipped' || status === 'out-for-delivery') pipeline.shipped++;
         });
         
         const avgOrder = orders.length > 0 ? (totalRevForAvg / orders.length).toFixed(0) : 0;
@@ -220,7 +239,7 @@ async function renderDashboard() {
         `).join('');
 
     } catch(err) {
-        showToast("Error loading dashboard data: " + (err.message || err), true);
+        showToast("Error loading dashboard data: " + (err.message || err), 'error');
         console.error(err);
     }
 }
@@ -274,20 +293,28 @@ async function renderProductReport() {
 async function renderCODReport() {
     const el = document.getElementById('cod-report-tbody');
     if(!el) return;
+    showLoading('cod-report-tbody');
     
-    const codOrders = allOrders.filter(o => (o.payment_method || '').toLowerCase() === 'cod');
-    
-    if(codOrders.length === 0) showEmpty('cod-report-tbody');
-    else {
-        el.innerHTML = codOrders.map(o => `
-            <tr>
-                <td>${o.order_number || o.id.toString().substring(0,8)}</td>
-                <td>${o.profile?.full_name || 'Guest'}</td>
-                <td><span class="badge ${o.status}">${o.status}</span></td>
-                <td>₹${o.total}</td>
-            </tr>
-        `).join('');
-    }
+    try {
+        const { data: codOrders, error } = await supabaseClient.from('orders')
+            .select(`*, profiles(full_name)`)
+            .ilike('payment_method', 'cod')
+            .order('created_at', { ascending: false });
+            
+        if(error) throw error;
+
+        if(!codOrders || codOrders.length === 0) showEmpty('cod-report-tbody');
+        else {
+            el.innerHTML = codOrders.map(o => `
+                <tr>
+                    <td>${o.order_number || o.id.toString().substring(0,8)}</td>
+                    <td>${o.profiles?.full_name || 'Guest'}</td>
+                    <td><span class="badge ${(o.status || '').toLowerCase()}">${o.status}</span></td>
+                    <td>₹${(o.total || 0).toLocaleString()}</td>
+                </tr>
+            `).join('');
+        }
+    } catch(err) { console.error(err); }
 }
 
 async function renderReviews() {
@@ -307,14 +334,14 @@ async function renderReviews() {
                     <td>
                         <div style="display:flex;gap:5px">
                             <button class="action-btn" title="Edit" onclick="editReview('${r.id}')"><i class="ph ph-note-pencil"></i></button>
-                            <button class="action-btn" title="Delete" onclick="deleteReview('${r.id}')"><i class="ph ph-trash"></i></button>
+                            <button class="action-btn btn-delete" title="Delete" onclick="deleteReview('${r.id}')"><i class="ph ph-trash"></i></button>
                         </div>
                     </td>
                 </tr>
             `).join('');
         }
     } catch(err) { 
-        showToast("Error loading reviews: " + (err.message || err), true); 
+        showToast("Error loading reviews: " + (err.message || err), 'error'); 
         console.error(err);
     }
 }
@@ -329,7 +356,7 @@ async function renderProducts() {
         if(data.length === 0) showEmpty('products-tbody');
         else buildProductsTable(data);
     } catch(err) {
-        showToast("Error loading products: " + (err.message || err), true);
+        showToast("Error loading products: " + (err.message || err), 'error');
         console.error(err);
     }
 }
@@ -352,7 +379,7 @@ function buildProductsTable(products) {
             </td>
             <td>
                 <button class="action-btn" title="Edit" onclick="editProduct('${p.id}')"><i class="ph ph-pencil-simple"></i></button>
-                <button class="action-btn" title="Delete" onclick="deleteProduct('${p.id}')"><i class="ph ph-trash"></i></button>
+                <button class="action-btn btn-delete" title="Delete" onclick="deleteProduct('${p.id}')"><i class="ph ph-trash"></i></button>
             </td>
         </tr>
     `}).join('');
@@ -360,7 +387,7 @@ function buildProductsTable(products) {
 
 async function toggleProductStock(id, isStock) {
     const { error } = await supabaseClient.from('products').update({ in_stock: isStock }).eq('id', id);
-    if(error) showToast("Error updating stock status", true);
+    if(error) showToast("Error updating stock status", 'error');
     else {
         showToast("Status updated successfully ✅");
         renderProducts();
@@ -368,12 +395,23 @@ async function toggleProductStock(id, isStock) {
 }
 
 async function deleteProduct(id) {
-    if(!await showConfirm("Delete Product?", "Are you sure you want to permanently delete this product?", "Delete", "#ef4444")) return;
-    const { error } = await supabaseClient.from('products').delete().eq('id', id);
-    if(error) showToast("Error deleting product", true);
-    else {
-        showToast("Product deleted successfully ✅");
-        renderProducts();
+    if(!await showConfirm("Delete Product?", "Are you sure you want to permanently delete this product? All reviews linked to it will also be affected.", "Delete", "#ef4444")) return;
+    
+    try {
+        const { error } = await supabaseClient.from('products').delete().eq('id', id);
+        if(error) {
+            console.error("Delete product error:", error);
+            if(error.code === '23503') {
+                showToast("Cannot delete: This product has existing orders. Try hiding it from stock instead.", 'warning');
+            } else {
+                showToast("Error deleting product: " + error.message, 'error');
+            }
+        } else {
+            showToast("Product deleted successfully ✅");
+            renderProducts();
+        }
+    } catch (e) {
+        showToast("Unexpected error during deletion", 'error');
     }
 }
 
@@ -392,48 +430,91 @@ async function loadCategoryOptions() {
 
 async function toggleCategoryStatus(id, active) {
     const { error } = await supabaseClient.from('categories').update({ active }).eq('id', id);
-    if(error) showToast("Error updating category status", true);
+    if(error) showToast("Error updating category status", 'error');
     else {
         showToast("Category status updated successfully ✅");
-        renderCategories(); // refresh list
+        renderCategories();
     }
 }
 
 async function renderCategories() {
     showLoading('categories-tbody');
     try {
-        const { data, error } = await supabaseClient.from('categories').select('*');
-        if(error) throw error;
-        if(data.length === 0) showEmpty('categories-tbody');
+        const { data: categories, error: catError } = await supabaseClient.from('categories').select('*');
+        const { data: products, error: prodError } = await supabaseClient.from('products').select('id, category_id');
+        
+        if(catError) throw catError;
+        allCategories = categories || [];
+        
+        // Calculate counts
+        const counts = (products || []).reduce((acc, p) => {
+            acc[p.category_id] = (acc[p.category_id] || 0) + 1;
+            return acc;
+        }, {});
+
+        if(categories.length === 0) showEmpty('categories-tbody');
         else {
-            document.getElementById('categories-tbody').innerHTML = data.map(c => `
+            document.getElementById('categories-tbody').innerHTML = categories.map(c => {
+                const pCount = counts[c.id] || 0;
+                return `
                 <tr>
                     <td><strong>${c.name}</strong></td>
                     <td>${c.slug}</td>
-                    <td>-</td>
+                    <td><span class="badge ${pCount > 0 ? 'info' : ''}" style="text-transform:none"> ${pCount} Products</span></td>
                     <td>
                         <label class="switch">
-                            <input type="checkbox" ${c.active !== false ? 'checked' : ''} onchange="toggleCategoryStatus('${c.id}', this.checked)">
+                            <input type="checkbox" ${c.active ? 'checked' : ''} onchange="toggleCategoryStatus('${c.id}', this.checked)">
                             <span class="slider"></span>
                         </label>
                     </td>
                     <td>
-                        <button class="action-btn" title="Delete" onclick="deleteCategory('${c.id}')"><i class="ph ph-trash"></i></button>
+                        <div style="display:flex; gap:8px">
+                            <button class="action-btn btn-delete" title="Delete" onclick="deleteCategory('${c.id}', ${pCount})"><i class="ph ph-trash"></i></button>
+                        </div>
                     </td>
                 </tr>
-            `).join('');
+            `}).join('');
         }
     } catch(err) {
-        showToast("Error loading categories: " + (err.message || err), true);
+        showToast("Error loading categories: " + (err.message || err), 'error');
         console.error(err);
     }
 }
 
-async function deleteCategory(id) {
-    if(!await showConfirm("Delete Category?", "Permanently delete this category?", "Delete", "#ef4444")) return;
-    const { error } = await supabaseClient.from('categories').delete().eq('id', id);
-    if(error) showToast("Error deleting category", true);
-    else { showToast("Deleted successfully ✅"); renderCategories(); }
+async function deleteCategory(id, pCount = 0) {
+    let confirmTitle = "Delete Category?";
+    let confirmMsg = "Are you sure you want to delete this category? This cannot be undone.";
+    
+    if(pCount > 0) {
+        confirmTitle = "Delete Category & Products?";
+        confirmMsg = `This category contains ${pCount} products. Deleting it will also PERMANENTLY remove all those products. Continue?`;
+    }
+
+    if(!await showConfirm(confirmTitle, confirmMsg, "Delete All", "#ef4444")) return;
+    
+    try {
+        // If there are products, try deleting them first
+        if(pCount > 0) {
+            const { error: pErr } = await supabaseClient.from('products').delete().eq('category_id', id);
+            if(pErr) {
+                if(pErr.code === '23503') {
+                    showToast("Cannot delete: Some products in this category have existing orders and cannot be removed.", 'error');
+                    return;
+                }
+                throw pErr;
+            }
+        }
+
+        const { error } = await supabaseClient.from('categories').delete().eq('id', id);
+        if(error) throw error;
+
+        showToast("Category and related products deleted successfully ✅"); 
+        renderCategories(); 
+        loadCategoryOptions();
+    } catch (err) {
+        showToast("Error during deletion: " + err.message, 'error');
+        console.error(err);
+    }
 }
 
 async function saveCategory() {
@@ -446,7 +527,7 @@ async function saveCategory() {
     if(!obj.name || !obj.slug) { showToast("Name and Slug are required", true); return; }
     
     const { error } = await supabaseClient.from('categories').insert([obj]);
-    if(error) showToast("Error saving category", true);
+    if(error) showToast("Error saving category", 'error');
     else {
         showToast("Category added successfully ✅");
         closeModal('categoryModal');
@@ -483,7 +564,7 @@ async function renderInventory() {
             `}).join('');
         }
     } catch(err) { 
-        showToast("Error loading inventory: " + (err.message || err), true); 
+        showToast("Error loading inventory: " + (err.message || err), 'error'); 
         console.error(err);
     }
 }
@@ -491,7 +572,7 @@ async function renderInventory() {
 async function updateStock(id) {
     const val = document.querySelector(`.stock-input-${id}`).value;
     const { error } = await supabaseClient.from('products').update({ stock_count: parseInt(val) }).eq('id', id);
-    if(error) showToast("Error updating, try again", true);
+    if(error) showToast("Error updating, try again", 'error');
     else { 
         showToast("Saved successfully ✅"); 
         renderInventory(); 
@@ -503,7 +584,7 @@ async function renderOrders(filterText = '') {
     showLoading('orders-tbody');
     try {
         let query = supabaseClient.from('orders').select(`*`).order('created_at', { ascending: false });
-        if(currentOrderFilter !== 'all') query = query.eq('status', currentOrderFilter);
+        if(currentOrderFilter !== 'all') query = query.ilike('status', currentOrderFilter);
         
         const { data: rawOrders, error } = await query;
         if(error) throw error;
@@ -527,14 +608,14 @@ async function renderOrders(filterText = '') {
                     <td><div><strong>${o.profile?.full_name || 'Guest'}</strong><br><small style="color:var(--text-muted)">${o.profile?.phone || ''}</small></div></td>
                     <td>₹${o.total}</td>
                     <td>${o.payment_method || 'N/A'}</td>
-                    <td><span class="badge ${o.status}">${o.status}</span></td>
+                    <td><span class="badge ${(o.status || '').toLowerCase()}">${o.status}</span></td>
                     <td>${o.created_at ? new Date(o.created_at).toLocaleDateString() : '-'}</td>
                     <td><button class="btn btn-outline" onclick="viewOrder('${o.id}')">View</button></td>
                 </tr>
             `).join('');
         }
     } catch(err) { 
-        showToast("Error loading orders data: " + (err.message || err), true); 
+        showToast("Error loading orders data: " + (err.message || err), 'error'); 
         console.error(err);
     }
 }
@@ -568,7 +649,7 @@ async function renderCustomers() {
             `}).join('');
         }
     } catch(err) { 
-        showToast("Error loading customers data: " + (err.message || err), true); 
+        showToast("Error loading customers data: " + (err.message || err), 'error'); 
         console.error(err);
     }
 }
@@ -593,14 +674,14 @@ async function renderCoupons() {
             `).join('');
         }
     } catch(err) { 
-        showToast("Error loading coupons data: " + (err.message || err), true); 
+        showToast("Error loading coupons data: " + (err.message || err), 'error'); 
         console.error(err);
     }
 }
 
 async function toggleCoupon(id, active) {
     const { error } = await supabaseClient.from('coupons').update({ active }).eq('id', id);
-    if(error) showToast("Error updating, try again", true);
+    if(error) showToast("Error updating, try again", 'error');
     else {
         showToast("Saved successfully ✅");
         renderCoupons();
@@ -610,8 +691,8 @@ async function toggleCoupon(id, active) {
 async function deleteCoupon(id) {
     if(!await showConfirm("Delete Coupon?", "Are you sure you want to delete this coupon code?", "Delete", "#ef4444")) return;
     const { error } = await supabaseClient.from('coupons').delete().eq('id', id);
-    if(error) showToast("Error deleting", true);
-    else { showToast("Deleted successfully ✅"); renderCoupons(); }
+    if(error) showToast("Error deleting: " + error.message, 'error');
+    else { showToast("Coupon removed successfully ✅"); renderCoupons(); }
 }
 
 async function saveCoupon() {
@@ -623,10 +704,10 @@ async function saveCoupon() {
         min_order_value: parseFloat(form.elements['min_order_value'].value || 0),
         active: true
     };
-    if(!obj.code || !obj.discount_value) { showToast("Code and Value are required", true); return; }
+    if(!obj.code || !obj.discount_value) { showToast("Code and Value are required", 'warning'); return; }
 
     const { error } = await supabaseClient.from('coupons').insert([obj]);
-    if(error) showToast("Error saving coupon", true);
+    if(error) showToast("Error saving coupon", 'error');
     else {
         showToast("Coupon added successfully ✅");
         closeModal('couponModal');
@@ -655,7 +736,7 @@ async function renderBanners() {
             `).join('');
         }
     } catch(err) { 
-        showToast("Error loading banners data: " + (err.message || err), true); 
+        showToast("Error loading banners data: " + (err.message || err), 'error'); 
         console.error(err);
     }
 }
@@ -667,9 +748,12 @@ async function toggleBanner(id, active) {
 }
 async function deleteBanner(id) {
     if(!await showConfirm("Delete Banner?", "Delete this promotional banner?", "Delete", "#ef4444")) return;
-    await supabaseClient.from('banners').delete().eq('id', id);
-    showToast("Deleted successfully ✅");
-    renderBanners();
+    const { error } = await supabaseClient.from('banners').delete().eq('id', id);
+    if(error) showToast("Error deleting: " + error.message, 'error');
+    else {
+        showToast("Banner deleted successfully ✅");
+        renderBanners();
+    }
 }
 
 async function saveBanner() {
@@ -681,10 +765,10 @@ async function saveBanner() {
         sort_order: parseInt(form.elements['sort_order'].value || 1),
         active: true
     };
-    if(!obj.title || !obj.image_url) { showToast("Title and Image URL are required", true); return; }
+    if(!obj.title || !obj.image_url) { showToast("Title and Image URL are required", 'warning'); return; }
 
     const { error } = await supabaseClient.from('banners').insert([obj]);
-    if(error) showToast("Error saving banner", true);
+    if(error) showToast("Error saving banner", 'error');
     else {
         showToast("Banner added successfully ✅");
         closeModal('bannerModal');
@@ -752,7 +836,7 @@ async function viewOrder(id) {
 async function updateOrderStatus() {
     const newStatus = document.getElementById('om-status-select').value;
     const { error } = await supabaseClient.from('orders').update({ status: newStatus }).eq('id', activeOrderId);
-    if(error) showToast("Error saving, try again", true);
+    if(error) showToast("Error saving, try again", 'error');
     else {
         showToast("Saved successfully ✅");
         renderOrders();
@@ -822,7 +906,7 @@ function resetProductForm() {
 
 async function editProduct(id) {
     const p = allProducts.find(x => x.id == id);
-    if(!p) { showToast('Product not found. Please refresh the page.', true); return; }
+    if(!p) { showToast('Product not found. Please refresh the page.', 'error'); return; }
     editingProductId = id;
 
     navigateTo('add-product');
@@ -878,7 +962,7 @@ async function saveProduct(event) {
     }
 
     if(result.error) {
-        showToast("Error saving product: " + result.error.message, true);
+        showToast("Error saving product: " + result.error.message, 'error');
     } else {
         showToast("Product saved successfully ✅");
         resetProductForm();
@@ -901,6 +985,23 @@ document.addEventListener('DOMContentLoaded', () => {
     renderReviews();
     renderBanners();
     setupChart();
+    renderProductReport();
+    renderCODReport();
+
+    const pnInput = document.getElementById('product-name-input');
+    if(pnInput) {
+        pnInput.addEventListener('input', (e) => {
+            const slugInput = document.querySelector('#product-form input[name="slug"]');
+            if(slugInput) {
+                slugInput.value = e.target.value
+                    .toLowerCase()
+                    .trim()
+                    .replace(/[^\w\s-]/g, '')
+                    .replace(/[\s_-]+/g, '-')
+                    .replace(/^-+|-+$/g, '');
+            }
+        });
+    }
 
     // Live Image Previews with Google Drive conversion
     function getDirectLink(url) {
@@ -988,7 +1089,7 @@ function handleLogin() {
         showToast('Login successful! Welcome Admin.');
     } else {
         if(errorMsg) errorMsg.style.display = 'block';
-        showToast('Access Denied. Check credentials.', true);
+        showToast('Access Denied. Check credentials.', 'error');
         console.log("Login failed for:", enteredEmail);
     }
 }
@@ -1020,7 +1121,7 @@ function openReviewModal() {
 
 async function editReview(id) {
     const { data, error } = await supabaseClient.from('reviews').select('*').eq('id', id).single();
-    if(error || !data) { showToast("Error loading review", true); return; }
+    if(error || !data) { showToast("Error loading review", 'error'); return; }
     
     document.getElementById('reviewModalTitle').innerText = 'Edit Review';
     const form = document.getElementById('review-form');
@@ -1040,10 +1141,10 @@ async function editReview(id) {
 }
 
 async function deleteReview(id) {
-    if(!await showConfirm("Delete Review?", "Are you sure? This will remove the feedback from your site.", "Delete", "#ef4444")) return;
+    if(!await showConfirm("Delete Review?", "Are you sure? This will remove the feedback from your site permanently.", "Delete", "#ef4444")) return;
     const { error } = await supabaseClient.from('reviews').delete().eq('id', id);
-    if(error) showToast("Error deleting", true);
-    else { showToast("Review deleted 🗑️"); renderReviews(); }
+    if(error) showToast("Error deleting: " + error.message, 'error');
+    else { showToast("Review deleted successfully 🗑️"); renderReviews(); }
 }
 
 const reviewForm = document.getElementById('review-form');
@@ -1062,7 +1163,7 @@ if(reviewForm) {
         if(id) res = await supabaseClient.from('reviews').update(obj).eq('id', id);
         else res = await supabaseClient.from('reviews').insert([obj]);
         
-        if(res.error) showToast("Error saving review: " + res.error.message, true);
+        if(res.error) showToast("Error saving review: " + res.error.message, 'error');
         else {
             showToast("Review saved successfully ✅");
             closeModal('reviewModal');
