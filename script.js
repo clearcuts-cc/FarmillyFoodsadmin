@@ -30,7 +30,7 @@ function navigateTo(pageId) {
             targetEl.parentElement.previousElementSibling.classList.add('active');
         }
     }
-    if(window.innerWidth <= 768) document.getElementById('sidebar').classList.remove('show');
+    if(window.innerWidth <= 1024) document.getElementById('sidebar').classList.remove('show');
 }
 
 document.querySelectorAll('[data-page]').forEach(el => {
@@ -110,7 +110,11 @@ function showConfirm(title, msg, btnText = "Continue", btnColor = "var(--primary
 
 function showLoading(elementId) {
     const el = document.getElementById(elementId);
-    if(el) el.innerHTML = `<tr><td colspan="10" style="text-align:center;padding:20px;">Loading...</td></tr>`;
+    if(el) {
+        el.innerHTML = `<tr><td colspan="10" style="text-align:center;padding:30px">
+            <div class="spinner"></div>
+        </td></tr>`;
+    }
 }
 
 function showEmpty(elementId, msg = "No data found") {
@@ -184,10 +188,10 @@ async function renderDashboard() {
         // Update Stat Cards via DOM traversal
         const statCardsTop = document.querySelectorAll('#page-dashboard .grid-cards:nth-of-type(1) .stat-value');
         if(statCardsTop.length >= 4) {
-            statCardsTop[0].innerText = `₹${todayRev}`;
-            statCardsTop[1].innerText = `₹${todayRev}`; // Using today for week to prevent breaking UI
+            statCardsTop[0].innerText = `₹${todayRev.toLocaleString()}`;
+            statCardsTop[1].innerText = `₹${totalRevForAvg.toLocaleString()}`; // Show actual total for week/total
             statCardsTop[2].innerText = todayOrders;
-            statCardsTop[3].innerText = `₹${avgOrder}`;
+            statCardsTop[3].innerText = `₹${avgOrder.toLocaleString()}`;
         }
 
         const statCardsPipe = document.querySelectorAll('#page-dashboard .grid-cards:nth-of-type(2) .stat-value');
@@ -204,7 +208,7 @@ async function renderDashboard() {
             document.getElementById('dashboard-recent-orders').innerHTML = orders.slice(0,5).map(o => `
                 <tr>
                     <td>${o.order_number || o.id.toString().substring(0,8)}</td>
-                    <td>${o.profile?.full_name || 'Guest'}</td>
+                    <td>${o.display_name}</td>
                     <td>-</td>
                     <td>₹${o.total}</td>
                     <td><span class="badge ${o.status}">${o.status}</span></td>
@@ -296,20 +300,36 @@ async function renderCODReport() {
     showLoading('cod-report-tbody');
     
     try {
-        const { data: codOrders, error } = await supabaseClient.from('orders')
-            .select(`*, profiles(full_name)`)
+        const { data: rawOrders, error } = await supabaseClient.from('orders')
+            .select(`*`)
             .ilike('payment_method', 'cod')
             .order('created_at', { ascending: false });
-            
+
         if(error) throw error;
+        
+        // Map addresses and profiles to COD orders
+        const { data: profiles } = await supabaseClient.from('profiles').select('*');
+        const profilesMap = (profiles || []).reduce((acc, p) => { acc[p.id] = p; return acc; }, {});
+        const { data: addresses } = await supabaseClient.from('addresses').select('*');
+        const addrMap = (addresses || []).reduce((acc, a) => { acc[a.id] = a; return acc; }, {});
+
+        const codOrders = (rawOrders || []).map(o => {
+            const addr = addrMap[o.address_id];
+            return {
+                ...o,
+                profile: profilesMap[o.user_id],
+                address: addr,
+                display_name: profilesMap[o.user_id]?.full_name || addr?.full_name || 'Guest'
+            };
+        });
 
         if(!codOrders || codOrders.length === 0) showEmpty('cod-report-tbody');
         else {
             el.innerHTML = codOrders.map(o => `
                 <tr>
                     <td>${o.order_number || o.id.toString().substring(0,8)}</td>
-                    <td>${o.profiles?.full_name || 'Guest'}</td>
-                    <td><span class="badge ${(o.status || '').toLowerCase()}">${o.status}</span></td>
+                <td>${o.display_name}</td>
+                <td><span class="status-badge status-${o.status}">${o.status}</span></td>
                     <td>₹${(o.total || 0).toLocaleString()}</td>
                 </tr>
             `).join('');
@@ -589,10 +609,22 @@ async function renderOrders(filterText = '') {
         const { data: rawOrders, error } = await query;
         if(error) throw error;
         
+        // Fetch Addresses to handle Guest Checkouts
+        const { data: rawAddresses } = await supabaseClient.from('addresses').select('*');
+        const addrMap = (rawAddresses || []).reduce((acc, a) => { acc[a.id] = a; return acc; }, {});
+
         const { data: profiles } = await supabaseClient.from('profiles').select('*');
         const profilesMap = (profiles || []).reduce((acc, p) => { acc[p.id] = p; return acc; }, {});
 
-        allOrders = (rawOrders || []).map(o => ({ ...o, profile: profilesMap[o.user_id] }));
+        allOrders = (rawOrders || []).map(o => {
+            const addr = addrMap[o.address_id];
+            return {
+                ...o,
+                profile: profilesMap[o.user_id],
+                address: addr,
+                display_name: o.profile?.full_name || addr?.full_name || 'Guest'
+            };
+        });
         
         let filtered = allOrders;
         if(filterText && typeof filterText === 'string') {
@@ -605,7 +637,7 @@ async function renderOrders(filterText = '') {
             document.getElementById('orders-tbody').innerHTML = filtered.map(o => `
                 <tr>
                     <td>${o.order_number || o.id.toString().substring(0,8)}</td>
-                    <td><div><strong>${o.profile?.full_name || 'Guest'}</strong><br><small style="color:var(--text-muted)">${o.profile?.phone || ''}</small></div></td>
+                    <td><div><strong>${o.display_name}</strong><br><small style="color:var(--text-muted)">${o.profile?.phone || o.address?.phone || ''}</small></div></td>
                     <td>₹${o.total}</td>
                     <td>${o.payment_method || 'N/A'}</td>
                     <td><span class="badge ${(o.status || '').toLowerCase()}">${o.status}</span></td>
@@ -621,32 +653,63 @@ async function renderOrders(filterText = '') {
 }
 
 async function renderCustomers() {
+    const el = document.getElementById('customers-tbody');
+    if(!el) return;
     showLoading('customers-tbody');
     try {
-        // Load profiles
-        const { data: profiles, error: pErr } = await supabaseClient.from('profiles').select('*');
-        if(pErr) throw pErr;
-        
-        // Load Orders to sum
-        const { data: orders, error: oErr } = await supabaseClient.from('orders').select('user_id, total');
-        if(oErr) throw oErr;
+        const { data: profiles } = await supabaseClient.from('profiles').select('*');
+        const { data: addresses } = await supabaseClient.from('addresses').select('*');
+        const { data: orders } = await supabaseClient.from('orders').select('user_id, total');
 
-        if(profiles.length === 0) showEmpty('customers-tbody');
-        else {
-            document.getElementById('customers-tbody').innerHTML = profiles.map(c => {
-                const cOrders = orders.filter(o => o.user_id === c.id);
-                const spent = cOrders.reduce((sum, o) => sum + (o.total || 0), 0);
-                return `
+        // Combine unique customers by phone (Registered + Guest)
+        const customersMap = {};
+
+        (profiles || []).forEach(p => {
+            if(!p.phone) return;
+            const cOrders = (orders || []).filter(o => o.user_id === p.id);
+            const spent = cOrders.reduce((sum, o) => sum + (parseFloat(o.total) || 0), 0);
+            customersMap[p.phone] = { 
+                name: p.full_name, 
+                phone: p.phone, 
+                email: p.email, 
+                spent, 
+                count: cOrders.length,
+                type: 'Registered' 
+            };
+        });
+
+        (addresses || []).forEach(a => {
+            if(!a.phone || customersMap[a.phone]) return;
+            // For guests, we don't have a user_id to link orders easily, 
+            // but we could match by phone if we wanted to be thorough.
+            customersMap[a.phone] = { 
+                name: a.full_name, 
+                phone: a.phone, 
+                email: 'Guest', 
+                spent: 0, 
+                count: 0, 
+                type: 'Guest' 
+            };
+        });
+
+        const data = Object.values(customersMap);
+
+        if(data.length === 0) {
+            showEmpty('customers-tbody');
+        } else {
+            el.innerHTML = data.map(c => `
                 <tr>
                     <td style="display:flex;align-items:center;gap:10px">
-                        <img src="https://ui-avatars.com/api/?name=${c.full_name || 'User'}&background=random" class="customer-avatar">
-                        <strong>${c.full_name || 'No Name'}</strong>
+                        <img src="https://ui-avatars.com/api/?name=${c.name || 'User'}&background=random" class="customer-avatar">
+                        <strong>${c.name || 'Anonymous'}</strong>
                     </td>
-                    <td>${c.email || 'N/A'}</td><td>${c.phone || 'N/A'}</td>
-                    <td>${cOrders.length}</td><td>₹${spent}</td>
-                    <td><button class="btn btn-outline">View Orders</button></td>
+                    <td>${c.phone || '-'}</td>
+                    <td>${c.email || '-'}</td>
+                    <td><span class="badge ${c.type === 'Guest' ? 'gray' : 'green'}">${c.type}</span></td>
+                    <td>${c.count}</td>
+                    <td>₹${(c.spent || 0).toLocaleString()}</td>
                 </tr>
-            `}).join('');
+            `).join('');
         }
     } catch(err) { 
         showToast("Error loading customers data: " + (err.message || err), 'error'); 
@@ -779,8 +842,12 @@ async function saveBanner() {
 
 // --- Utils & Interactions ---
 function filterTable(tableId, text) {
-    if (tableId === 'products') {
-        const filtered = allProducts.filter(p => p.name.toLowerCase().includes(text.toLowerCase()) || (p.categories?.name || '').toLowerCase().includes(text.toLowerCase()));
+    if (tableId === 'products-table') { // Match the ID used in index.html
+        const filtered = allProducts.filter(p => {
+            const cat = allCategories.find(c => c.id === p.category_id);
+            const lower = text.toLowerCase();
+            return p.name.toLowerCase().includes(lower) || (cat?.name || '').toLowerCase().includes(lower);
+        });
         buildProductsTable(filtered);
     }
 }
@@ -813,8 +880,38 @@ async function viewOrder(id) {
     if(!o) return;
     activeOrderId = id;
     document.getElementById('om-title').innerText = `Order ${o.order_number || o.id.toString().substring(0,8)}`;
-    document.getElementById('om-customer').innerText = o.profile?.full_name || 'Guest';
-    document.getElementById('om-phone').innerText = o.profile?.phone || '-';
+    document.getElementById('om-customer').innerText = o.display_name;
+    document.getElementById('om-phone').innerText = o.profile?.phone || o.address?.phone || '-';
+    
+    // Show Full Shipping Address
+    const addrDiv = document.getElementById('om-full-address');
+    if(addrDiv) {
+        if(o.address) {
+            addrDiv.innerHTML = `
+                ${o.address.address_line}<br>
+                ${o.address.city}, ${o.address.state} - ${o.address.pincode}
+            `;
+        } else {
+            addrDiv.innerText = 'No shipping address found';
+        }
+    }
+
+    // Show Razorpay Details if available
+    const rpDiv = document.getElementById('om-razorpay');
+    if(rpDiv) {
+        const { data: payments } = await supabaseClient.from('payments').select('*').eq('order_id', id).limit(1);
+        const p = payments?.[0];
+        if(p && p.razorpay_order_id) {
+            rpDiv.innerHTML = `
+                <div style="font-size:0.8rem; margin-top:10px; padding:10px; background:#eff6ff; border-radius:8px">
+                    <div><strong>RP Order:</strong> ${p.razorpay_order_id}</div>
+                    <div><strong>RP Payment:</strong> ${p.razorpay_payment_id || 'Pending'}</div>
+                </div>
+            `;
+        } else {
+            rpDiv.innerHTML = '';
+        }
+    }
     document.getElementById('om-date').innerText = new Date(o.created_at).toLocaleString();
     document.getElementById('om-payment').innerText = o.payment_method || 'N/A';
     document.getElementById('om-amount').innerText = `₹${o.total}`;
@@ -1087,6 +1184,19 @@ function handleLogin() {
         document.getElementById('sidebar').style.display = 'flex';
         document.getElementById('main-wrapper').style.display = 'flex';
         showToast('Login successful! Welcome Admin.');
+        
+        // Trigger all manual loads so user doesn't have to refresh
+        loadCategoryOptions();
+        renderDashboard();
+        renderProducts();
+        renderCategories();
+        renderInventory();
+        renderOrders();
+        renderCustomers();
+        renderCoupons();
+        renderReviews();
+        renderBanners();
+        setupChart();
     } else {
         if(errorMsg) errorMsg.style.display = 'block';
         showToast('Access Denied. Check credentials.', 'error');

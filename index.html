@@ -129,40 +129,47 @@
             <div id="page-dashboard" class="page active">
                 <div class="grid-cards">
                     <div class="card stat-card">
-                        <span class="stat-title">Today's Revenue</span>
-                        <span class="stat-value">₹12,480</span>
+                        <h4 class="stat-title">Today's Revenue</h4>
+                        <span class="stat-value">₹0</span>
                     </div>
                     <div class="card stat-card">
-                        <span class="stat-title">This Week's Revenue</span>
-                        <span class="stat-value">₹68,240</span>
+                        <div class="stat-icon" style="background:#f0fdf4; color:#22c55e"><i class="ph-bold ph-calendar"></i></div>
+                        <h4 class="stat-title">This Week</h4>
+                        <span class="stat-value">₹0</span>
                     </div>
                     <div class="card stat-card">
-                        <span class="stat-title">Orders Today</span>
-                        <span class="stat-value">24</span>
+                        <div class="stat-icon" style="background:#fefce8; color:#eab308"><i class="ph-bold ph-shopping-cart"></i></div>
+                        <h4 class="stat-title">New Orders</h4>
+                        <span class="stat-value">0</span>
                     </div>
                     <div class="card stat-card">
-                        <span class="stat-title">Average Order Value</span>
-                        <span class="stat-value">₹519</span>
+                        <div class="stat-icon" style="background:#fdf4ff; color:#d946ef"><i class="ph-bold ph-chart-pie"></i></div>
+                        <h4 class="stat-title">Avg. Order</h4>
+                        <span class="stat-value">₹0</span>
                     </div>
                 </div>
 
                 <h3 style="margin-bottom: 16px;">Order Pipeline</h3>
                 <div class="grid-cards">
-                    <div class="card stat-card orange">
-                        <span class="stat-title">Needs Acceptance</span>
-                        <span class="stat-value">8</span>
+                    <div class="card stat-card">
+                        <div class="stat-icon" style="background:#fff7ed; color:#f97316"><i class="ph-bold ph-clock"></i></div>
+                        <h4 class="stat-title">Pending</h4>
+                        <span class="stat-value">0</span>
                     </div>
-                    <div class="card stat-card blue">
-                        <span class="stat-title">Ready for Pickup</span>
-                        <span class="stat-value">5</span>
+                    <div class="card stat-card">
+                        <div class="stat-icon" style="background:#f5f3ff; color:#8b5cf6"><i class="ph-bold ph-package"></i></div>
+                        <h4 class="stat-title">Packed</h4>
+                        <span class="stat-value">0</span>
                     </div>
-                    <div class="card stat-card purple">
-                        <span class="stat-title">Out for Delivery</span>
-                        <span class="stat-value">11</span>
+                    <div class="card stat-card">
+                        <div class="stat-icon" style="background:#ecfdf5; color:#10b981"><i class="ph-bold ph-truck"></i></div>
+                        <h4 class="stat-title">Shipped</h4>
+                        <span class="stat-value">0</span>
                     </div>
-                    <div class="card stat-card green">
-                        <span class="stat-title">Completed Today</span>
-                        <span class="stat-value">18</span>
+                    <div class="card stat-card">
+                        <div class="stat-icon" style="background:#fef2f2; color:#ef4444"><i class="ph-bold ph-check-circle"></i></div>
+                        <h4 class="stat-title">Delivered</h4>
+                        <span class="stat-value">0</span>
                     </div>
                 </div>
 
@@ -534,10 +541,19 @@
             </div>
             <div class="modal-body">
                 <p><strong>Customer:</strong> <span id="om-customer"></span> (<span id="om-phone"></span>)</p>
+                <div id="om-full-address" style="margin-bottom:15px; color:var(--text-muted); font-size:0.9rem; line-height:1.4"></div>
                 <p><strong>Date:</strong> <span id="om-date"></span></p>
-                <p><strong>Payment:</strong> <span id="om-payment"></span></p>
+                <div id="om-razorpay"></div>
+                <p><strong>Payment Method:</strong> <span id="om-payment"></span></p>
                 <div style="margin:20px 0; padding:10px; background:#f9fafb; border-radius:8px">
                     Total Amount: <strong style="font-size:1.2rem" id="om-amount"></strong>
+                </div>
+
+                <div class="order-items-section" style="margin-top:20px">
+                    <h4 style="margin-bottom:10px; font-size:1rem; color:var(--text-main)">Order Items</h4>
+                    <div id="om-items" style="display:flex; flex-direction:column; gap:8px; font-size:0.9rem; color:var(--text-muted)">
+                        <!-- Items populated by JS -->
+                    </div>
                 </div>
                 <div class="form-group">
                     <label class="form-label">Update Status</label>
