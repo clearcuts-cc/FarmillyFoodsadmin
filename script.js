@@ -208,9 +208,7 @@ async function renderDashboard() {
             document.getElementById('dashboard-recent-orders').innerHTML = orders.slice(0,5).map(o => `
                 <tr>
                     <td>${o.order_number || o.id.toString().substring(0,8)}</td>
-                    <td>${o.display_name}</td>
-                    <td>-</td>
-                    <td>₹${o.total}</td>
+                    <td>₹${(o.total || 0).toLocaleString()}</td>
                     <td><span class="badge ${o.status}">${o.status}</span></td>
                     <td><button class="btn btn-outline" style="padding:4px 8px;font-size:0.75rem" onclick="viewOrder('${o.id}')">View</button></td>
                 </tr>
@@ -328,8 +326,7 @@ async function renderCODReport() {
             el.innerHTML = codOrders.map(o => `
                 <tr>
                     <td>${o.order_number || o.id.toString().substring(0,8)}</td>
-                <td>${o.display_name}</td>
-                <td><span class="status-badge status-${o.status}">${o.status}</span></td>
+                    <td><span class="status-badge status-${o.status}">${o.status}</span></td>
                     <td>₹${(o.total || 0).toLocaleString()}</td>
                 </tr>
             `).join('');
@@ -637,7 +634,6 @@ async function renderOrders(filterText = '') {
             document.getElementById('orders-tbody').innerHTML = filtered.map(o => `
                 <tr>
                     <td>${o.order_number || o.id.toString().substring(0,8)}</td>
-                    <td><div><strong>${o.display_name}</strong><br><small style="color:var(--text-muted)">${o.profile?.phone || o.address?.phone || ''}</small></div></td>
                     <td>₹${o.total}</td>
                     <td>${o.payment_method || 'N/A'}</td>
                     <td><span class="badge ${(o.status || '').toLowerCase()}">${o.status}</span></td>
@@ -856,6 +852,44 @@ function filterOrders(text) {
     renderOrders(text);
 }
 
+async function searchByOrderId(id) {
+    if(!id) return;
+    id = id.trim();
+    showToast(`Searching for ${id}...`, 'info');
+    
+    // First check local
+    const localMatch = allOrders.find(o => (o.order_number && o.order_number === id) || o.id == id);
+    if(localMatch) {
+        viewOrder(localMatch.id);
+        return;
+    }
+
+    // Direct Supabase Query
+    try {
+        let query = supabaseClient.from('orders').select('*');
+        
+        // If it's a number, search both. If string, search order_number only.
+        if(!isNaN(id) && !id.includes('-')) {
+            query = query.or(`id.eq.${id},order_number.eq.${id}`);
+        } else {
+            query = query.eq('order_number', id);
+        }
+
+        const { data, error } = await query.maybeSingle();
+
+        if(error) throw error;
+        if(!data) {
+            showToast("Order ID not found in database", 'warning');
+            return;
+        }
+
+        viewOrder(data.id);
+    } catch(err) {
+        console.error("Search error:", err);
+        showToast("Error searching for order", 'error');
+    }
+}
+
 // Order Tabs
 document.querySelectorAll('#order-tabs .tab').forEach(tab => {
     tab.addEventListener('click', () => {
@@ -876,8 +910,34 @@ document.querySelectorAll('.tab-link').forEach(link => {
 
 let activeOrderId = null;
 async function viewOrder(id) {
-    const o = allOrders.find(x => x.id == id);
-    if(!o) return;
+    let o = allOrders.find(x => x.id == id);
+    
+    if(!o) {
+        // Fetch from Supabase if not in local cache
+        const { data, error } = await supabaseClient.from('orders').select('*').eq('id', id).single();
+        if(error || !data) {
+            // Try searching by order_number if id fails (human readable search)
+            const { data: byNum, error: errNum } = await supabaseClient.from('orders').select('*').eq('order_number', id).single();
+            if(errNum || !byNum) {
+                showToast("Order not found", 'error');
+                return;
+            }
+            o = byNum;
+        } else {
+            o = data;
+        }
+        
+        // Resolve profile/address if missing
+        if(!o.profile && o.user_id) {
+            const { data: p } = await supabaseClient.from('profiles').select('*').eq('id', o.user_id).single();
+            o.profile = p;
+        }
+        if(!o.address && o.address_id) {
+            const { data: a } = await supabaseClient.from('addresses').select('*').eq('id', o.address_id).single();
+            o.address = a;
+        }
+        o.display_name = o.profile?.full_name || o.address?.full_name || 'Guest';
+    }
     activeOrderId = id;
     document.getElementById('om-title').innerText = `Order ${o.order_number || o.id.toString().substring(0,8)}`;
     document.getElementById('om-customer').innerText = o.display_name;
@@ -923,7 +983,16 @@ async function viewOrder(id) {
         itemsContainer.innerHTML = 'Loading items...';
         const { data: items } = await supabaseClient.from('order_items').select('*').eq('order_id', id);
         if(items) {
-            itemsContainer.innerHTML = items.map(i => `<div>${i.quantity}x ${i.product_name} - ₹${i.total_price}</div>`).join('');
+            itemsContainer.innerHTML = items.map(i => `
+                <div style="display:flex; align-items:center; gap:12px; padding:8px; background:white; border-radius:10px; border:1px solid var(--border-color)">
+                    <img src="${i.product_image || 'https://placehold.co/50'}" style="width:40px; height:40px; border-radius:8px; object-fit:cover;">
+                    <div style="flex:1">
+                        <div style="font-weight:600; color:var(--text-main)">${i.product_name}</div>
+                        <div style="font-size:0.8rem; color:var(--text-muted)">${i.quantity} x ₹${i.unit_price}</div>
+                    </div>
+                    <div style="font-weight:700; color:var(--primary)">₹${i.total_price}</div>
+                </div>
+            `).join('');
         }
     }
 
@@ -1084,6 +1153,27 @@ document.addEventListener('DOMContentLoaded', () => {
     setupChart();
     renderProductReport();
     renderCODReport();
+    
+    // Check for order_id in URL params
+    const urlParams = new URLSearchParams(window.location.search);
+    const orderIdParam = urlParams.get('order_id');
+    if(orderIdParam) {
+        setTimeout(() => searchByOrderId(orderIdParam), 1500); // Small delay to let admin auth/load finish
+    }
+    
+    // --- Realtime Order Subscription ---
+    supabaseClient
+        .channel('order-updates')
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'orders' }, payload => {
+            console.log('New order detected:', payload.new);
+            showToast('New Order Received! 🚀', 'success');
+            
+            // Refresh counts and views
+            renderDashboard();
+            renderOrders();
+            renderCODReport();
+        })
+        .subscribe();
 
     const pnInput = document.getElementById('product-name-input');
     if(pnInput) {

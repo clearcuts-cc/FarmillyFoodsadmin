@@ -311,6 +311,20 @@ body {
     gap: 24px;
 }
 
+.header-search input {
+    background: #f8fafc;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    transition: var(--transition);
+}
+
+.header-search input:focus {
+    background: white;
+    width: 320px !important;
+    border-color: var(--primary-light);
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+}
+
 .notification {
     position: relative;
     cursor: pointer;

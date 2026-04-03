@@ -115,11 +115,14 @@
                 <span id="page-title">Dashboard</span>
             </div>
             <div class="header-actions">
+                <div class="header-search" style="position:relative; margin-right:20px;">
+                    <i class="ph ph-magnifying-glass" style="position:absolute; left:12px; top:50%; transform:translateY(-50%); color:var(--text-muted);"></i>
+                    <input type="text" id="global-order-search" placeholder="Quick Find Order ID..." class="form-control" style="width:220px; padding-left:35px; height:36px; font-size:0.875rem;" onkeypress="if(event.key === 'Enter') searchByOrderId(this.value)">
+                </div>
                 <div class="notification">
                     🔔
                     <div class="notification-dot"></div>
                 </div>
-                <!-- Profile dropdown omitted for brevity -->
             </div>
         </header>
 
@@ -320,10 +323,10 @@
                 </div>
                 <div class="table-container">
                     <div class="table-header">
-                        <input type="text" class="form-control" placeholder="Search Order ID or Customer..." oninput="filterOrders(this.value)" style="width: 300px;">
+                        <input type="text" class="form-control" placeholder="Search Order ID..." oninput="filterOrders(this.value)" style="width: 300px;">
                     </div>
                     <table id="orders-table">
-                        <thead><tr><th>Order #</th><th>Customer</th><th>Amount</th><th>Payment</th><th>Status</th><th>Date</th><th>Action</th></tr></thead>
+                        <thead><tr><th>Order #</th><th>Amount</th><th>Payment</th><th>Status</th><th>Date</th><th>Action</th></tr></thead>
                         <tbody id="orders-tbody"></tbody>
                     </table>
                 </div>
@@ -364,7 +367,7 @@
                     <div class="table-container">
                         <div class="table-header"><span class="table-title">COD Collection Tracking</span></div>
                         <table>
-                            <thead><tr><th>Order #</th><th>Customer</th><th>Status</th><th>Amount</th></tr></thead>
+                            <thead><tr><th>Order #</th><th>Status</th><th>Amount</th></tr></thead>
                             <tbody id="cod-report-tbody"></tbody>
                         </table>
                     </div>
