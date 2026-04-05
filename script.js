@@ -1493,7 +1493,12 @@ function buildCorpTable(orders) {
     }
     tbody.innerHTML = orders.map(o => {
         const date = o.created_at ? new Date(o.created_at).toLocaleDateString('en-IN', {day:'2-digit',month:'short',year:'2-digit'}) : '-';
-        const mix = `Imam: ${o.imam_qty || 0}kg / Alph: ${o.alph_qty || 0}kg`;
+        const mixParts = [];
+        if (o.imam_qty) mixParts.push(`Imam: ${o.imam_qty}kg`);
+        if (o.alph_qty) mixParts.push(`Alph: ${o.alph_qty}kg`);
+        if (o.bang_qty) mixParts.push(`Bang: ${o.bang_qty}kg`);
+        if (o.sent_qty) mixParts.push(`Sent: ${o.sent_qty}kg`);
+        const mix = mixParts.length ? mixParts.join(' / ') : 'Standard Mix';
         return `<tr>
             <td style="font-size:0.8rem;color:#64748b;font-family:monospace;font-weight:700">${o.enquiry_ref || '#' + o.id}</td>
             <td><strong>${o.company_name || '-'}</strong></td>
@@ -1555,6 +1560,8 @@ function viewCorpOrder(id) {
                 <div style="font-size:0.75rem;color:#94a3b8;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Mango Mix</div>
                 <div>Imam Pasand: <strong>${o.imam_qty || 0} kg</strong></div>
                 <div>Alphonso: <strong>${o.alph_qty || 0} kg</strong></div>
+                <div>Banganapalli: <strong>${o.bang_qty || 0} kg</strong></div>
+                <div>Senthura: <strong>${o.sent_qty || 0} kg</strong></div>
             </div>
             <div>
                 <div style="font-size:0.75rem;color:#94a3b8;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Total Units</div>
@@ -1613,8 +1620,11 @@ async function saveCorpOrder() {
         total_units: parseInt(form.elements['total_units'].value) || 15,
         imam_qty: parseInt(form.elements['imam_qty'].value) || 0,
         alph_qty: parseInt(form.elements['alph_qty'].value) || 0,
+        bang_qty: parseInt(form.elements['bang_qty']?.value) || 0,
+        sent_qty: parseInt(form.elements['sent_qty']?.value) || 0,
         heritage_message: form.elements['heritage_message'].value.trim(),
         notes: form.elements['notes'].value.trim(),
+        enquiry_ref: 'CE-' + Math.floor(1000000 + Math.random() * 9000000),
         status: 'new'
     };
 
