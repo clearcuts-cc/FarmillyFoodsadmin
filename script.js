@@ -18,7 +18,7 @@ function navigateTo(pageId) {
         'dashboard': 'Dashboard', 'all-products': 'All Products', 'add-product': 'Add Product',
         'categories': 'Categories', 'inventory': 'Inventory', 'all-orders': 'All Orders',
         'customers': 'Customers', 'reports': 'Reports', 'coupons': 'Coupons',
-        'banners': 'Banners', 'settings': 'Settings'
+        'banners': 'Banners', 'reviews': 'Reviews', 'corporate': 'Corporate Orders 🏢', 'settings': 'Settings'
     };
     document.getElementById('page-title').innerText = titles[pageId] || 'Admin';
 
@@ -1150,6 +1150,7 @@ document.addEventListener('DOMContentLoaded', () => {
     renderCoupons();
     renderReviews();
     renderBanners();
+    renderCorpOrders();
     setupChart();
     renderProductReport();
     renderCODReport();
@@ -1161,17 +1162,21 @@ document.addEventListener('DOMContentLoaded', () => {
         setTimeout(() => searchByOrderId(orderIdParam), 1500); // Small delay to let admin auth/load finish
     }
     
-    // --- Realtime Order Subscription ---
+    // --- Realtime Subscriptions ---
     supabaseClient
         .channel('order-updates')
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'orders' }, payload => {
             console.log('New order detected:', payload.new);
             showToast('New Order Received! 🚀', 'success');
-            
-            // Refresh counts and views
             renderDashboard();
             renderOrders();
             renderCODReport();
+        })
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'corporate_orders' }, payload => {
+            showToast('New Corporate Enquiry! 🏢', 'success');
+            const badge = document.getElementById('corp-badge');
+            if (badge) badge.style.display = 'inline-block';
+            renderCorpOrders();
         })
         .subscribe();
 
@@ -1424,4 +1429,215 @@ function handleFileUpload(input, targetInputNameOrId, previewId) {
         img.src = e.target.result;
     };
     reader.readAsDataURL(file);
+}
+
+// ============================================================
+// CORPORATE ORDERS MODULE
+// ============================================================
+
+let allCorpOrders = [];
+let viewingCorpOrderId = null;
+
+const corpStatusColors = {
+    new:       { bg: '#fef3c7', text: '#92400e' },
+    contacted: { bg: '#e0f2fe', text: '#075985' },
+    confirmed: { bg: '#dcfce7', text: '#166534' },
+    fulfilled: { bg: '#d1fae5', text: '#065f46' },
+    cancelled: { bg: '#fee2e2', text: '#991b1b' }
+};
+
+function corpStatusBadge(status) {
+    const s = (status || 'new').toLowerCase();
+    const colors = {
+        new:       { bg: '#FEF3C7', text: '#92400E' },
+        contacted: { bg: '#DBEAFE', text: '#1E40AF' },
+        confirmed: { bg: '#D1FAE5', text: '#065F46' },
+        fulfilled: { bg: '#E0E7FF', text: '#3730A3' },
+        cancelled: { bg: '#FEE2E2', text: '#991B1B' }
+    };
+    const c = colors[s] || colors.new;
+    return `<span style="background:${c.bg};color:${c.text};padding:6px 12px;border-radius:99px;font-size:0.7rem;font-weight:800;text-transform:uppercase;">${s}</span>`;
+}
+
+async function renderCorpOrders() {
+    showLoading('corp-orders-tbody');
+    try {
+        const { data, error } = await supabaseClient
+            .from('corporate_orders')
+            .select('*')
+            .order('created_at', { ascending: false });
+        if (error) throw error;
+        allCorpOrders = data || [];
+
+        const badge = document.getElementById('corp-badge');
+        const hasNew = allCorpOrders.some(o => o.status === 'new');
+        if (badge) badge.style.display = hasNew ? 'inline-block' : 'none';
+
+        buildCorpTable(allCorpOrders);
+    } catch(err) {
+        showToast('Error loading corporate orders: ' + err.message, 'error');
+        console.error(err);
+    }
+}
+
+function buildCorpTable(orders) {
+    const tbody = document.getElementById('corp-orders-tbody');
+    if (!tbody) return;
+    if (!orders.length) {
+        tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:40px;color:#94a3b8">
+            <i class="ph ph-buildings" style="font-size:2.5rem;display:block;margin-bottom:10px;color:#d1d5db;"></i>
+            No corporate enquiries yet.<br>
+            <span style="font-size:0.82rem">They appear here when companies submit from the website portal.</span>
+        </td></tr>`;
+        return;
+    }
+    tbody.innerHTML = orders.map(o => {
+        const date = o.created_at ? new Date(o.created_at).toLocaleDateString('en-IN', {day:'2-digit',month:'short',year:'2-digit'}) : '-';
+        const mix = `Imam: ${o.imam_qty || 0}kg / Alph: ${o.alph_qty || 0}kg`;
+        return `<tr>
+            <td style="font-size:0.8rem;color:#64748b;font-family:monospace;font-weight:700">${o.enquiry_ref || '#' + o.id}</td>
+            <td><strong>${o.company_name || '-'}</strong></td>
+            <td>${o.contact_person || '-'}<br><span style="font-size:0.78rem;color:#94a3b8">${o.phone || ''}</span></td>
+            <td><span style="background:#f0fdf4;color:#166534;padding:3px 9px;border-radius:8px;font-size:0.78rem;font-weight:700">${o.crate_size}kg</span></td>
+            <td style="font-size:0.82rem;color:#475569">${mix}</td>
+            <td><strong>${o.total_units || 15}</strong></td>
+            <td>${corpStatusBadge(o.status)}</td>
+            <td style="font-size:0.8rem;color:#64748b">${date}</td>
+            <td>
+                <div style="display:flex;gap:6px">
+                    <button class="action-btn" title="View Details" onclick="viewCorpOrder('${o.id}')"><i class="ph ph-eye"></i></button>
+                    <button class="action-btn btn-delete" title="Delete" onclick="deleteCorpOrder('${o.id}')"><i class="ph ph-trash"></i></button>
+                </div>
+            </td>
+        </tr>`;
+    }).join('');
+}
+
+function filterCorpOrders(q) {
+    const statusFilter = document.getElementById('corp-status-filter') ? document.getElementById('corp-status-filter').value : '';
+    q = (q || '').toLowerCase();
+    let filtered = allCorpOrders;
+    if (statusFilter) filtered = filtered.filter(o => o.status === statusFilter);
+    if (q) filtered = filtered.filter(o =>
+        (o.enquiry_ref || '').toLowerCase().includes(q) ||
+        (o.company_name || '').toLowerCase().includes(q) ||
+        (o.contact_person || '').toLowerCase().includes(q) ||
+        (o.phone || '').includes(q)
+    );
+    buildCorpTable(filtered);
+}
+
+function viewCorpOrder(id) {
+    const o = allCorpOrders.find(x => String(x.id) === String(id));
+    if (!o) return;
+    viewingCorpOrderId = id;
+
+    const body = document.getElementById('corp-detail-body');
+    const statusSel = document.getElementById('corp-status-select');
+
+    body.innerHTML = `
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px">
+            <div>
+                <div style="font-size:0.75rem;color:#94a3b8;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Reference / Company</div>
+                <div style="font-weight:700;font-size:1.1rem">${o.company_name || '-'}</div>
+                <div style="font-size:0.85rem;color:#64748b;font-family:monospace">${o.enquiry_ref || '#' + o.id}</div>
+            </div>
+            <div>
+                <div style="font-size:0.75rem;color:#94a3b8;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Contact</div>
+                <div>${o.contact_person || 'N/A'}</div>
+                <div style="color:#64748b;font-size:0.85rem">${o.phone || ''} ${o.email ? '· ' + o.email : ''}</div>
+            </div>
+            <div>
+                <div style="font-size:0.75rem;color:#94a3b8;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Crate Size</div>
+                <div><strong>${o.crate_size} KG</strong> — ${o.crate_size == 3 ? '3kg Elite' : '5kg Grand'}</div>
+            </div>
+            <div>
+                <div style="font-size:0.75rem;color:#94a3b8;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Mango Mix</div>
+                <div>Imam Pasand: <strong>${o.imam_qty || 0} kg</strong></div>
+                <div>Alphonso: <strong>${o.alph_qty || 0} kg</strong></div>
+            </div>
+            <div>
+                <div style="font-size:0.75rem;color:#94a3b8;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Total Units</div>
+                <div><strong>${o.total_units || 15}</strong> crates (MOQ 15)</div>
+            </div>
+            <div>
+                <div style="font-size:0.75rem;color:#94a3b8;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Submitted On</div>
+                <div style="font-size:0.88rem">${o.created_at ? new Date(o.created_at).toLocaleString('en-IN') : '-'}</div>
+            </div>
+        </div>
+        ${o.heritage_message ? `
+        <div style="background:#fdfcf0;border-left:4px solid #d4af37;border-radius:8px;padding:16px;margin-bottom:16px">
+            <div style="font-size:0.75rem;color:#92400e;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Heritage Card Message</div>
+            <div style="font-style:italic;color:#44403c">"${o.heritage_message}"</div>
+        </div>` : ''}
+        ${o.notes ? `
+        <div style="background:#f8fafc;border-radius:8px;padding:14px;margin-bottom:16px">
+            <div style="font-size:0.75rem;color:#94a3b8;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Internal Notes</div>
+            <div>${o.notes}</div>
+        </div>` : ''}
+    `;
+
+    if (statusSel) statusSel.value = o.status || 'new';
+    openModal('corpDetailModal');
+}
+
+async function updateCorpStatus() {
+    if (!viewingCorpOrderId) return;
+    const status = document.getElementById('corp-status-select').value;
+    try {
+        const { error } = await supabaseClient
+            .from('corporate_orders')
+            .update({ status })
+            .eq('id', viewingCorpOrderId);
+        if (error) throw error;
+        showToast('Status updated successfully');
+        closeModal('corpDetailModal');
+        renderCorpOrders();
+    } catch(err) {
+        showToast('Error updating status: ' + err.message, 'error');
+    }
+}
+
+async function saveCorpOrder() {
+    const form = document.getElementById('corp-order-form');
+    if (!form) return;
+    const company = form.elements['company_name'].value.trim();
+    if (!company) { showToast('Company name is required', 'warning'); return; }
+
+    const obj = {
+        company_name: company,
+        contact_person: form.elements['contact_person'].value.trim(),
+        phone: form.elements['phone'].value.trim(),
+        email: form.elements['email'].value.trim(),
+        crate_size: parseInt(form.elements['crate_size'].value),
+        total_units: parseInt(form.elements['total_units'].value) || 15,
+        imam_qty: parseInt(form.elements['imam_qty'].value) || 0,
+        alph_qty: parseInt(form.elements['alph_qty'].value) || 0,
+        heritage_message: form.elements['heritage_message'].value.trim(),
+        notes: form.elements['notes'].value.trim(),
+        status: 'new'
+    };
+
+    try {
+        const { error } = await supabaseClient.from('corporate_orders').insert([obj]);
+        if (error) throw error;
+        showToast('Corporate enquiry saved');
+        closeModal('corpOrderModal');
+        form.reset();
+        renderCorpOrders();
+    } catch(err) {
+        showToast('Error saving: ' + err.message, 'error');
+    }
+}
+
+async function deleteCorpOrder(id) {
+    if (!await showConfirm('Delete Enquiry?', 'Are you sure you want to remove this corporate enquiry?', 'Delete', '#ef4444')) return;
+    try {
+        const { error } = await supabaseClient.from('corporate_orders').delete().eq('id', id);
+        if (error) throw error;
+        showToast('Enquiry deleted');
+        renderCorpOrders();
+    } catch(err) {
+        showToast('Error deleting: ' + err.message, 'error');
+    }
 }

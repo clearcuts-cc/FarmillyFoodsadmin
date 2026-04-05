@@ -91,6 +91,10 @@
             <div class="nav-item" data-page="reviews">
                 <i class="ph ph-star"></i> <span>Reviews</span>
             </div>
+            <div class="nav-item" data-page="corporate">
+                <i class="ph ph-buildings"></i> <span>Corporate Orders</span>
+                <span id="corp-badge" style="margin-left:auto;background:#f59e0b;color:#fff;font-size:0.65rem;font-weight:800;padding:2px 7px;border-radius:20px;display:none;">New</span>
+            </div>
             <div class="nav-item" data-page="settings">
                 <i class="ph ph-gear"></i> <span>Settings</span>
             </div>
@@ -462,6 +466,30 @@
                 </div>
             </div>
 
+            <!-- Corporate Orders Page -->
+            <div id="page-corporate" class="page">
+                <div class="table-container">
+                    <div class="table-header">
+                        <div style="display:flex; gap:10px; align-items:center;">
+                            <input type="text" class="form-control" placeholder="Search company or contact..." oninput="filterCorpOrders(this.value)" style="width: 280px;">
+                            <select id="corp-status-filter" class="form-control" style="width: auto;" onchange="filterCorpOrders(document.querySelector('#page-corporate input').value)">
+                                <option value="">All Statuses</option>
+                                <option value="new">New</option>
+                                <option value="contacted">Contacted</option>
+                                <option value="confirmed">Confirmed</option>
+                                <option value="fulfilled">Fulfilled</option>
+                                <option value="cancelled">Cancelled</option>
+                            </select>
+                        </div>
+                        <button class="btn btn-primary" onclick="openModal('corpOrderModal')">+ Manual Entry</button>
+                    </div>
+                    <table id="corp-orders-table">
+                        <thead><tr><th>#</th><th>Company</th><th>Contact</th><th>Crate</th><th>Mix</th><th>Units</th><th>Status</th><th>Date</th><th>Action</th></tr></thead>
+                        <tbody id="corp-orders-tbody"></tbody>
+                    </table>
+                </div>
+            </div>
+
             <div id="page-settings" class="page">
                 <div class="grid-2-col">
                     <div class="card">
@@ -594,6 +622,98 @@
             <div class="modal-footer">
                 <button class="btn btn-outline" onclick="closeModal('bannerModal')">Cancel</button>
                 <button class="btn btn-primary" onclick="saveBanner()">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Corporate Order Manual Entry Modal -->
+    <div class="modal-overlay" id="corpOrderModal">
+        <div class="modal">
+            <div class="modal-header">
+                <span class="modal-title">Add Corporate Enquiry</span>
+                <button class="close-modal" onclick="closeModal('corpOrderModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="corp-order-form">
+                    <div class="grid-2-col" style="gap:16px">
+                        <div class="form-group">
+                            <label class="form-label">Company Name <span style="color:#ef4444">*</span></label>
+                            <input type="text" name="company_name" class="form-control" placeholder="e.g. Tata Consultancy" required>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Contact Person</label>
+                            <input type="text" name="contact_person" class="form-control" placeholder="e.g. Ravi Kumar">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Phone</label>
+                            <input type="text" name="phone" class="form-control" placeholder="+91 9XXXXXXXXX">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Email</label>
+                            <input type="email" name="email" class="form-control" placeholder="ravi@company.com">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Crate Size (kg)</label>
+                            <select name="crate_size" class="form-control">
+                                <option value="3">3 KG Elite</option>
+                                <option value="5">5 KG Grand</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Total Units (min 15)</label>
+                            <input type="number" name="total_units" class="form-control" value="15" min="15" required>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Imam Pasand (KG per crate)</label>
+                            <input type="number" name="imam_qty" class="form-control" value="0" min="0">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Alphonso (KG per crate)</label>
+                            <input type="number" name="alph_qty" class="form-control" value="0" min="0">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Heritage Card Message</label>
+                        <textarea name="heritage_message" class="form-control" rows="3" placeholder="Custom message for inner card..."></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Internal Notes</label>
+                        <textarea name="notes" class="form-control" rows="2" placeholder="Admin notes..."></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline" onclick="closeModal('corpOrderModal')">Cancel</button>
+                <button class="btn btn-primary" onclick="saveCorpOrder()">Save Enquiry</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Corporate Order Detail Modal -->
+    <div class="modal-overlay" id="corpDetailModal">
+        <div class="modal">
+            <div class="modal-header" style="background: linear-gradient(135deg, #042f1f, #0c1813);">
+                <span class="modal-title" style="color:#fff; display:flex; align-items:center; gap:10px;">
+                    <i class="ph ph-buildings" style="font-size:1.4rem;color:#f59e0b;"></i>
+                    Corporate Order Detail
+                </span>
+                <button class="close-modal" onclick="closeModal('corpDetailModal')" style="background:rgba(255,255,255,0.1);border-color:rgba(255,255,255,0.2);color:white;">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="corp-detail-body"></div>
+                <div class="form-group" style="margin-top:20px">
+                    <label class="form-label">Update Status</label>
+                    <div style="display:flex; gap:10px">
+                        <select class="form-control" id="corp-status-select">
+                            <option value="new">New</option>
+                            <option value="contacted">Contacted</option>
+                            <option value="confirmed">Confirmed</option>
+                            <option value="fulfilled">Fulfilled</option>
+                            <option value="cancelled">Cancelled</option>
+                        </select>
+                        <button class="btn btn-primary" onclick="updateCorpStatus()">Update</button>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
