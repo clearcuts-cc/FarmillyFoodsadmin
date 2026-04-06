@@ -1084,6 +1084,8 @@ async function editProduct(id) {
     await loadCategoryOptions();
 
     form.elements['name'].value = p.name || '';
+    form.elements['category_id'].value = p.category_id || '';
+    form.elements['badge'].value = p.badge || '';
     form.elements['slug'].value = p.slug || '';
     form.elements['description'].value = p.description || '';
     form.elements['image_url'].value = p.image_url || '';
@@ -1092,9 +1094,6 @@ async function editProduct(id) {
     form.elements['stock_count'].value = p.stock_count || 0;
     form.elements['weight'].value = p.weight || '';
     form.elements['in_stock'].checked = !!p.in_stock;
-
-    // Set category after options are populated
-    form.elements['category_id'].value = p.category_id || '';
 
     const preview = document.getElementById('img-preview');
     if(preview) preview.src = p.image_url || 'https://placehold.co/100';
@@ -1110,6 +1109,7 @@ async function saveProduct(event) {
     const obj = {
         name: form.elements['name'].value,
         category_id: form.elements['category_id'].value,
+        badge: form.elements['badge'].value,
         slug: form.elements['slug'].value,
         description: form.elements['description'].value,
         image_url: form.elements['image_url'].value,
@@ -1568,6 +1568,11 @@ function viewCorpOrder(id) {
                 <div><strong>${o.total_units || 15}</strong> crates (MOQ 15)</div>
             </div>
             <div>
+                <div style="font-size:0.75rem;color:#94a3b8;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Pricing</div>
+                <div style="font-weight:700;font-size:1.1rem;color:var(--primary)">₹${(o.total_price || 0).toLocaleString('en-IN')}</div>
+                <div style="font-size:0.75rem;color:#64748b">Estimated Total</div>
+            </div>
+            <div>
                 <div style="font-size:0.75rem;color:#94a3b8;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Submitted On</div>
                 <div style="font-size:0.88rem">${o.created_at ? new Date(o.created_at).toLocaleString('en-IN') : '-'}</div>
             </div>
@@ -1650,4 +1655,26 @@ async function deleteCorpOrder(id) {
     } catch(err) {
         showToast('Error deleting: ' + err.message, 'error');
     }
+}
+
+async function renderProductReport() {
+    const tbody = document.getElementById('product-report-tbody');
+    if(!tbody) return;
+    tbody.innerHTML = allProducts.slice(0, 5).map(p => {
+        const cat = allCategories.find(c => c.id === p.category_id);
+        return `<tr><td>${p.name}</td><td>${cat?.name || 'N/A'}</td><td>${p.stock_count}</td><td>₹${p.price}</td></tr>`;
+    }).join('');
+}
+
+async function renderCODReport() {
+    const tbody = document.getElementById('cod-report-tbody');
+    if(!tbody) return;
+    const codOrders = allOrders.filter(o => o.payment_method?.toLowerCase().includes('cod'));
+    if(!codOrders.length) {
+        tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;padding:15px;color:#94a3b8">No COD</td></tr>';
+        return;
+    }
+    tbody.innerHTML = codOrders.map(o => `
+        <tr><td>#${o.order_number || o.id}</td><td><span style="font-size:0.75rem;padding:3px 8px;border-radius:6px;background:#fef3c7;color:#92400e;font-weight:700;">${o.status.toUpperCase()}</span></td><td><strong>₹${o.total}</strong></td></tr>
+    `).join('');
 }
