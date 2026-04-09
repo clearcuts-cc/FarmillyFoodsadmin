@@ -219,7 +219,7 @@
                         <button class="btn btn-primary" onclick="resetProductForm(); navigateTo('add-product')">+ Add Product</button>
                     </div>
                     <table id="products-table">
-                        <thead><tr><th>Image</th><th>Name</th><th>Category</th><th>Price</th><th>Stock</th><th>Out of Stock</th><th>Make Project Hide</th><th>Actions</th></tr></thead>
+                        <thead><tr><th>Image</th><th>Name</th><th>Category</th><th>Price</th><th>Stock</th><th>Stock Status</th><th>Visibility</th><th>Actions</th></tr></thead>
                         <tbody id="products-tbody"></tbody>
                     </table>
                 </div>
@@ -297,9 +297,17 @@
                                         <label class="switch"><input type="checkbox" name="in_stock" checked><span class="slider"></span></label>
                                     </div>
                                     <div class="form-group">
-                                        <label class="form-label">Make Project Hide</label>
                                         <label class="switch"><input type="checkbox" name="is_active" checked><span class="slider"></span></label>
+                                        <label class="form-label" style="display:inline; margin-left:8px;">Visible</label>
                                     </div>
+                                    <div class="form-group">
+                                        <label class="switch"><input type="checkbox" name="is_featured"><span class="slider"></span></label>
+                                        <label class="form-label" style="display:inline; margin-left:8px;">Featured Product</label>
+                                    </div>
+                                </div>
+                                <div class="grid-2-col" style="gap:10px">
+                                    <div class="form-group"><label class="form-label">Initial Rating (1-5)</label><input type="number" step="0.1" name="rating" class="form-control" value="5.0"></div>
+                                    <div class="form-group"><label class="form-label">Review Count</label><input type="number" name="review_count" class="form-control" value="10"></div>
                                 </div>
                             </div>
                         </div>

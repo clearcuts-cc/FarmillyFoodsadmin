@@ -124,6 +124,24 @@ function showEmpty(elementId, msg = "No data found") {
 
 // --- Data Fetching & Rendering ---
 
+// --- Utils ---
+function getUnitPrice(price, wt) {
+    const pVal = parseFloat(price || 0);
+    const w = (wt || '').toLowerCase();
+    const nm = w.match(/[\d.]+/);
+    const nVal = nm ? parseFloat(nm[0]) : 0;
+    
+    let rate = pVal;
+    let unit = (w.includes('l') && !w.includes('ml')) || w.includes('lit') || w.includes('ml') ? 'L' : 'kg';
+    
+    if (nVal > 0) {
+        if (w.includes('ml')) rate = (pVal / nVal) * 1000;
+        else if (w.includes('kg') || (w.includes('l') && !w.includes('ml'))) rate = pVal / nVal;
+        else if (w.includes('g') && !w.includes('kg')) rate = (pVal / nVal) * 1000;
+    }
+    return { rate: Math.round(rate), unit };
+}
+
 async function renderDashboard() {
     showLoading('dashboard-recent-orders');
     showLoading('dashboard-top-products');
@@ -397,17 +415,8 @@ function buildProductsTable(products) {
             <td>
                 <div style="font-weight:700; color:var(--text-main)">
                     Rate: ₹${(() => {
-                        const w = (p.weight || '').toLowerCase();
-                        const nm = w.match(/[\d.]+/);
-                        const nVal = nm ? parseFloat(nm[0]) : 0;
-                        let rate = p.price;
-                        let unit = (w.includes('l') || w.includes('lit')) ? 'L' : 'kg';
-                        if (nVal > 0) {
-                            if (w.includes('ml')) rate = (p.price / nVal) * 1000;
-                            else if (w.includes('kg') || (w.includes('l') && !w.includes('ml'))) rate = p.price / nVal;
-                            else if (w.includes('g') && !w.includes('kg')) rate = (p.price / nVal) * 1000;
-                        }
-                        return Math.round(rate) + '/' + unit;
+                        const info = getUnitPrice(p.price, p.weight);
+                        return info.rate + '/' + info.unit;
                     })()}
                 </div>
                 <div style="font-size:0.75rem; color:#64748b; font-weight:600">
@@ -429,11 +438,11 @@ function buildProductsTable(products) {
             <td>
                 <div style="display:flex; align-items:center; gap:8px;">
                     <label class="switch">
-                        <input type="checkbox" ${isHidden ? 'checked' : ''} onchange="toggleProductVisibility('${p.id}', !this.checked)">
+                        <input type="checkbox" ${p.is_active ? 'checked' : ''} onchange="toggleProductVisibility('${p.id}', this.checked)">
                         <span class="slider"></span>
                     </label>
-                    <span style="font-size: 0.75rem; color: ${isHidden ? '#94a3b8' : '#3b82f6'}; font-weight: 600;">
-                        ${isHidden ? 'Make Project Hide' : 'Visible'}
+                    <span style="font-size: 0.75rem; color: ${p.is_active ? '#3b82f6' : '#94a3b8'}; font-weight: 600;">
+                        ${p.is_active ? 'Visible' : 'Hidden'}
                     </span>
                 </div>
             </td>
@@ -1285,6 +1294,9 @@ async function editProduct(id) {
 
     form.elements['in_stock'].checked = !!p.in_stock;
     form.elements['is_active'].checked = p.is_active !== false;
+    form.elements['is_featured'].checked = !!p.is_featured;
+    form.elements['rating'].value = p.rating || 5.0;
+    form.elements['review_count'].value = p.review_count || 10;
 
     const preview = document.getElementById('img-preview');
     if(preview) preview.src = p.image_url || 'https://placehold.co/100';
@@ -1309,7 +1321,10 @@ async function saveProduct(event) {
         stock_count: parseInt(form.elements['stock_count'].value),
         weight: (document.getElementById('weight-value').value + document.getElementById('weight-unit').value).toLowerCase(),
         in_stock: form.elements['in_stock'].checked,
-        is_active: form.elements['is_active'].checked
+        is_active: form.elements['is_active'].checked,
+        is_featured: form.elements['is_featured'].checked,
+        rating: parseFloat(form.elements['rating'].value || 5.0),
+        review_count: parseInt(form.elements['review_count'].value || 10)
     };
 
     let result;
@@ -1694,7 +1709,7 @@ function buildCorpTable(orders) {
         return `<tr>
             <td style="font-size:0.8rem;color:#64748b;font-family:monospace;font-weight:700">${o.enquiry_ref || '#' + o.id}</td>
             <td><strong>${o.company_name || '-'}</strong></td>
-            <td>${o.contact_person || '-'}<br><span style="font-size:0.78rem;color:#94a3b8">${o.phone || ''}</span></td>
+            <td>${o.contact_person || '-'}<br><span style="font-size:0.78rem;color:#94a3b8">${o.contact_phone || o.phone || ''}</span></td>
             <td><span style="background:#f0fdf4;color:#166534;padding:3px 9px;border-radius:8px;font-size:0.78rem;font-weight:700">${o.crate_size}kg</span></td>
             <td style="font-size:0.82rem;color:#475569">${mix}</td>
             <td><strong>${o.total_units || 15}</strong></td>
@@ -1742,7 +1757,7 @@ function viewCorpOrder(id) {
             <div>
                 <div style="font-size:0.75rem;color:#94a3b8;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Contact</div>
                 <div>${o.contact_person || 'N/A'}</div>
-                <div style="color:#64748b;font-size:0.85rem">${o.phone || ''} ${o.email ? '· ' + o.email : ''}</div>
+                <div style="color:#64748b;font-size:0.85rem">${o.contact_phone || o.phone || ''} ${o.contact_email || o.email ? '· ' + (o.contact_email || o.email) : ''}</div>
             </div>
             <div>
                 <div style="font-size:0.75rem;color:#94a3b8;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Crate Size</div>
@@ -1761,7 +1776,7 @@ function viewCorpOrder(id) {
             </div>
             <div>
                 <div style="font-size:0.75rem;color:#94a3b8;font-weight:700;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Pricing</div>
-                <div style="font-weight:700;font-size:1.1rem;color:var(--primary)">₹${(o.total_price || 0).toLocaleString('en-IN')}</div>
+                <div style="font-weight:700;font-size:1.1rem;color:var(--primary)">₹${(o.total_amount || 0).toLocaleString('en-IN')}</div>
                 <div style="font-size:0.75rem;color:#64748b">Estimated Total</div>
             </div>
             <div>
@@ -1810,9 +1825,11 @@ async function saveCorpOrder() {
 
     const obj = {
         company_name: company,
-        contact_person: form.elements['contact_person'].value.trim(),
-        phone: form.elements['phone'].value.trim(),
-        email: form.elements['email'].value.trim(),
+        contact_person: form.elements['contact_person']?.value?.trim() || '',
+        contact_phone: form.elements['phone']?.value?.trim() || '',
+        contact_email: form.elements['email']?.value?.trim() || '',
+        phone: form.elements['phone']?.value?.trim() || '', // Keep for backward compatibility
+        email: form.elements['email']?.value?.trim() || '', // Keep for backward compatibility
         crate_size: parseInt(form.elements['crate_size'].value),
         total_units: parseInt(form.elements['total_units'].value) || 15,
         imam_qty: parseInt(form.elements['imam_qty'].value) || 0,
