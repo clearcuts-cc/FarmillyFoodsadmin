@@ -232,13 +232,18 @@ async function renderDashboard() {
             </tr>
         `).join('');
 
-        // Low stock
-        const lowStock = products.filter(p => p.stock_count > 0 && p.stock_count < 20);
-        document.getElementById('dashboard-low-stock').innerHTML = lowStock.map(p => `
-            <div style="display:flex;justify-content:space-between;border-bottom:1px solid rgba(0,0,0,0.05);padding:5px 0">
-                <span>${p.name}</span> <strong>${p.stock_count} left</strong>
+        // Low stock (now including out of stock)
+        const lowStock = products.filter(p => p.stock_count < 20).sort((a,b) => a.stock_count - b.stock_count);
+        document.getElementById('dashboard-low-stock').innerHTML = lowStock.map(p => {
+            const isOut = p.stock_count <= 0;
+            return `
+            <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid rgba(0,0,0,0.05); padding:8px 0;">
+                <span style="font-weight:600; font-size:0.85rem">${p.name}</span> 
+                <span class="badge ${isOut ? 'danger' : 'warning'}" style="font-size:0.65rem; padding:2px 8px;">
+                    ${isOut ? 'OUT' : p.stock_count + ' LEFT'}
+                </span>
             </div>
-        `).join('');
+        `}).join('');
 
     } catch(err) {
         showToast("Error loading dashboard data: " + (err.message || err), 'error');
@@ -381,22 +386,62 @@ async function renderProducts() {
 function buildProductsTable(products) {
     document.getElementById('products-tbody').innerHTML = products.map(p => {
         const cat = allCategories.find(c => c.id === p.category_id);
+        const isOutOfStock = p.in_stock === false;
+        const isHidden = p.is_active === false;
+        
         return `
         <tr>
             <td><img src="${p.image_url || 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=100'}" class="product-img"></td>
             <td><strong>${p.name}</strong></td>
             <td>${cat?.name || '-'}</td>
-            <td>₹${p.price}</td>
+            <td>
+                <div style="font-weight:700; color:var(--text-main)">
+                    Rate: ₹${(() => {
+                        const w = (p.weight || '').toLowerCase();
+                        const nm = w.match(/[\d.]+/);
+                        const nVal = nm ? parseFloat(nm[0]) : 0;
+                        let rate = p.price;
+                        let unit = (w.includes('l') || w.includes('lit')) ? 'L' : 'kg';
+                        if (nVal > 0) {
+                            if (w.includes('ml')) rate = (p.price / nVal) * 1000;
+                            else if (w.includes('kg') || (w.includes('l') && !w.includes('ml'))) rate = p.price / nVal;
+                            else if (w.includes('g') && !w.includes('kg')) rate = (p.price / nVal) * 1000;
+                        }
+                        return Math.round(rate) + '/' + unit;
+                    })()}
+                </div>
+                <div style="font-size:0.75rem; color:#64748b; font-weight:600">
+                    Total Item Price: ₹${p.price}
+                </div>
+            </td>
             <td>${p.stock_count}</td>
             <td>
-                <label class="switch">
-                    <input type="checkbox" ${p.in_stock ? 'checked' : ''} onchange="toggleProductStock('${p.id}', this.checked)">
-                    <span class="slider"></span>
-                </label>
+                <div style="display:flex; align-items:center; gap:8px;">
+                    <label class="switch">
+                        <input type="checkbox" ${isOutOfStock ? 'checked' : ''} onchange="toggleProductStock('${p.id}', !this.checked)">
+                        <span class="slider"></span>
+                    </label>
+                    <span style="font-size: 0.75rem; color: ${isOutOfStock ? '#ef4444' : '#10b981'}; font-weight: 600;">
+                        ${isOutOfStock ? 'Out of Stock' : 'In Stock'}
+                    </span>
+                </div>
             </td>
             <td>
-                <button class="action-btn" title="Edit" onclick="editProduct('${p.id}')"><i class="ph ph-pencil-simple"></i></button>
-                <button class="action-btn btn-delete" title="Delete" onclick="deleteProduct('${p.id}')"><i class="ph ph-trash"></i></button>
+                <div style="display:flex; align-items:center; gap:8px;">
+                    <label class="switch">
+                        <input type="checkbox" ${isHidden ? 'checked' : ''} onchange="toggleProductVisibility('${p.id}', !this.checked)">
+                        <span class="slider"></span>
+                    </label>
+                    <span style="font-size: 0.75rem; color: ${isHidden ? '#94a3b8' : '#3b82f6'}; font-weight: 600;">
+                        ${isHidden ? 'Make Project Hide' : 'Visible'}
+                    </span>
+                </div>
+            </td>
+            <td>
+                <div style="display:flex; gap:5px">
+                    <button class="action-btn" title="Edit" onclick="editProduct('${p.id}')"><i class="ph ph-pencil-simple"></i></button>
+                    <button class="action-btn btn-delete" title="Delete" onclick="deleteProduct('${p.id}')"><i class="ph ph-trash"></i></button>
+                </div>
             </td>
         </tr>
     `}).join('');
@@ -406,7 +451,16 @@ async function toggleProductStock(id, isStock) {
     const { error } = await supabaseClient.from('products').update({ in_stock: isStock }).eq('id', id);
     if(error) showToast("Error updating stock status", 'error');
     else {
-        showToast("Status updated successfully ✅");
+        showToast("Stock status updated ✅");
+        renderProducts();
+    }
+}
+
+async function toggleProductVisibility(id, isActive) {
+    const { error } = await supabaseClient.from('products').update({ is_active: isActive }).eq('id', id);
+    if(error) showToast("Error updating visibility", 'error');
+    else {
+        showToast("Product visibility updated ✅");
         renderProducts();
     }
 }
@@ -437,12 +491,24 @@ async function loadCategoryOptions() {
     const { data } = await supabaseClient.from('categories').select('*');
     if(data) {
         allCategories = data;
-        // Wait, the HTML needs a select box for category. We'll populate it if it exists
         const selects = document.querySelectorAll('select[name="category_id"]');
         selects.forEach(s => {
             s.innerHTML = '<option value="">Select Category</option>' + data.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
         });
+
+        // Populate Category Filter on All Products Page
+        const filterSelect = document.getElementById('product-category-filter');
+        if (filterSelect) {
+            filterSelect.innerHTML = '<option value="">All Categories</option>' + 
+                data.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+        }
     }
+}
+
+function filterProductsByCategory(catId) {
+    if (!catId) { buildProductsTable(allProducts); return; }
+    const filtered = allProducts.filter(p => String(p.category_id) === String(catId));
+    buildProductsTable(filtered);
 }
 
 async function toggleCategoryStatus(id, active) {
@@ -554,28 +620,79 @@ async function saveCategory() {
 }
 
 async function renderInventory() {
+    const tbody = document.getElementById('inventory-tbody');
+    if (!tbody) return;
     showLoading('inventory-tbody');
+    
     try {
-        const { data: products, error: pErr } = await supabaseClient.from('products').select(`*`);
+        const { data: products, error: pErr } = await supabaseClient.from('products').select('*').order('name');
         const { data: categories, error: cErr } = await supabaseClient.from('categories').select('*');
         if(pErr) throw pErr;
         
         const catMap = (categories || []).reduce((acc, c) => { acc[c.id] = c.name; return acc; }, {});
 
-        if(products.length === 0) showEmpty('inventory-tbody');
-        else {
-            document.getElementById('inventory-tbody').innerHTML = products.map(p => {
-                let count = p.stock_count || 0;
-                let status = count > 20 ? 'Good' : (count > 0 ? 'Low' : 'Out');
-                let colorClass = count > 20 ? 'green' : (count > 0 ? 'warning' : 'danger');
+        if(!products || products.length === 0) {
+            showEmpty('inventory-tbody');
+        } else {
+            tbody.innerHTML = products.map(p => {
+                const count = p.stock_count || 0;
+                let statusLabel, colorClass;
+                
+                if (count > 20) {
+                    statusLabel = 'In Stock';
+                    colorClass = 'success';
+                } else if (count > 0) {
+                    statusLabel = 'Low Stock';
+                    colorClass = 'warning';
+                } else {
+                    statusLabel = 'Out of Stock';
+                    colorClass = 'danger';
+                }
+
+                const img = p.image_url || 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=100';
+
                 return `
                 <tr>
-                    <td>${p.name}</td><td>${catMap[p.category_id] || ''}</td>
-                    <td><strong>${count}</strong></td>
-                    <td><span class="badge" style="background:var(--${colorClass});color:white">${status}</span></td>
-                    <td style="display:flex;gap:5px">
-                        <input type="number" class="form-control stock-input-${p.id}" style="width:70px;padding:4px" value="${count}">
-                        <button class="btn btn-outline" style="padding:4px 8px" onclick="updateStock('${p.id}')">Update</button>
+                    <td>
+                        <div style="display:flex; align-items:center; gap:12px;">
+                            <img src="${img}" style="width:40px; height:40px; border-radius:8px; object-fit:cover; border:1px solid var(--border-color);">
+                            <div style="display:flex; flex-direction:column;">
+                                <strong style="color:var(--text-main)">${p.name}</strong>
+                                <span style="font-size:0.75rem; color:var(--text-muted)">SKU: ${p.sku || 'N/A'}</span>
+                            </div>
+                        </div>
+                    </td>
+                    <td><span style="font-size:0.85rem; color:var(--text-muted); font-weight:600;">${catMap[p.category_id] || 'Uncategorized'}</span></td>
+                    <td>
+                        <div style="font-size:1.1rem; font-weight:800; color:var(--text-main)">${count}</div>
+                        <span style="font-size:0.7rem; color:var(--text-muted)">units available</span>
+                    </td>
+                    <td>
+                        <div style="margin-bottom:8px">
+                            <span class="badge ${colorClass}" style="font-size:0.7rem; padding:4px 10px; min-width:95px; text-align:center;">
+                                ${statusLabel}
+                            </span>
+                        </div>
+                        <div style="display:flex; align-items:center; gap:8px;">
+                            <label class="switch" style="width:36px; height:20px;">
+                                <input type="checkbox" ${!p.in_stock ? 'checked' : ''} onchange="toggleProductStock('${p.id}', !this.checked)">
+                                <span class="slider" style="border-radius:20px;"></span>
+                            </label>
+                            <span style="font-size:0.65rem; color:var(--text-muted); font-weight:700;">HIDDEN STOCK</span>
+                        </div>
+                    </td>
+                    <td>
+                        <div style="display:flex; align-items:center; gap:8px;">
+                            <div class="stock-ctrl" style="display:flex; border:1px solid var(--border-color); border-radius: var(--radius-sm); overflow:hidden; background:white;">
+                                <button onclick="adjustStockValue('${p.id}', -1)" style="border:none; background:none; padding:8px 10px; cursor:pointer; color:var(--text-muted);"><i class="ph ph-minus"></i></button>
+                                <input type="number" class="stock-input-${p.id}" value="${count}" 
+                                    style="width:50px; border:none; border-left:1px solid var(--border-color); border-right:1px solid var(--border-color); text-align:center; font-weight:700; font-size:0.9rem;">
+                                <button onclick="adjustStockValue('${p.id}', 1)" style="border:none; background:none; padding:8px 10px; cursor:pointer; color:var(--text-muted);"><i class="ph ph-plus"></i></button>
+                            </div>
+                            <button class="btn btn-primary" style="padding:8px 12px; font-size:0.8rem;" onclick="updateStock('${p.id}')">
+                                <i class="ph ph-arrows-clockwise"></i> Update
+                            </button>
+                        </div>
                     </td>
                 </tr>
             `}).join('');
@@ -586,15 +703,68 @@ async function renderInventory() {
     }
 }
 
-async function updateStock(id) {
-    const val = document.querySelector(`.stock-input-${id}`).value;
-    const { error } = await supabaseClient.from('products').update({ stock_count: parseInt(val) }).eq('id', id);
-    if(error) showToast("Error updating, try again", 'error');
-    else { 
-        showToast("Saved successfully ✅"); 
-        renderInventory(); 
-        renderDashboard(); // Update low stock alerts too
+function adjustStockValue(id, delta) {
+    const input = document.querySelector(`.stock-input-${id}`);
+    if (input) {
+        input.value = Math.max(0, parseInt(input.value || 0) + delta);
     }
+}
+
+async function updateStock(id) {
+    const input = document.querySelector(`.stock-input-${id}`);
+    const btn = input.parentElement.nextElementSibling;
+    const oldHtml = btn.innerHTML;
+    
+    btn.disabled = true;
+    btn.innerHTML = '<i class="ph ph-circle-notch spinner-sm"></i>';
+    
+    const val = parseInt(input.value || 0);
+    
+    try {
+        const { error } = await supabaseClient.from('products').update({ stock_count: val }).eq('id', id);
+        if(error) throw error;
+        
+        showToast("Stock updated successfully ✅"); 
+        
+        // Update local state if it exists
+        const p = allProducts.find(x => x.id == id);
+        if(p) p.stock_count = val;
+        
+        renderInventory(); 
+        renderDashboard(); 
+    } catch(error) {
+        showToast("Error updating stock", 'error');
+        btn.disabled = false;
+        btn.innerHTML = oldHtml;
+    }
+}
+
+function filterInventory(q) {
+    q = (q || '').toLowerCase();
+    const rows = document.querySelectorAll('#inventory-tbody tr');
+    rows.forEach(row => {
+        const name = row.querySelector('strong').innerText.toLowerCase();
+        row.style.display = name.includes(q) ? '' : 'none';
+    });
+}
+
+function filterInventoryByStatus(status) {
+    const rows = document.querySelectorAll('#inventory-tbody tr');
+    rows.forEach(row => {
+        if(status === 'all') {
+            row.style.display = '';
+            return;
+        }
+        const badge = row.querySelector('.badge');
+        const badgeText = badge.innerText.toLowerCase();
+        
+        let match = false;
+        if(status === 'good' && badgeText.includes('in stock')) match = true;
+        if(status === 'low' && badgeText.includes('low stock')) match = true;
+        if(status === 'out' && badgeText.includes('out of stock')) match = true;
+        
+        row.style.display = match ? '' : 'none';
+    });
 }
 
 async function renderOrders(filterText = '') {
@@ -1068,6 +1238,12 @@ function resetProductForm() {
     if(title) title.innerText = 'Add New Product';
     const btn = document.getElementById('save-product-btn');
     if(btn) btn.innerText = 'Save Product';
+
+    // Reset weight defaults
+    const wv = document.getElementById('weight-value');
+    const wu = document.getElementById('weight-unit');
+    if(wv) wv.value = "1";
+    if(wu) wu.value = "kg";
 }
 
 async function editProduct(id) {
@@ -1092,8 +1268,23 @@ async function editProduct(id) {
     form.elements['price'].value = p.price || '';
     form.elements['original_price'].value = p.original_price || '';
     form.elements['stock_count'].value = p.stock_count || 0;
-    form.elements['weight'].value = p.weight || '';
+    
+    // Parse weight for edit
+    const wv = document.getElementById('weight-value');
+    const wu = document.getElementById('weight-unit');
+    if(wv && wu && p.weight) {
+        const wt = p.weight.toLowerCase();
+        const nm = wt.match(/[\d.]+/);
+        if(nm) wv.value = nm[0];
+        
+        if(wt.includes('ml')) wu.value = 'ml';
+        else if(wt.includes('litre') || wt.includes(' l') || wt.endsWith('l')) wu.value = 'L';
+        else if(wt.includes('kg')) wu.value = 'kg';
+        else if(wt.includes('g') && !wt.includes('kg')) wu.value = 'g';
+    }
+
     form.elements['in_stock'].checked = !!p.in_stock;
+    form.elements['is_active'].checked = p.is_active !== false;
 
     const preview = document.getElementById('img-preview');
     if(preview) preview.src = p.image_url || 'https://placehold.co/100';
@@ -1116,8 +1307,9 @@ async function saveProduct(event) {
         price: parseFloat(form.elements['price'].value),
         original_price: parseFloat(form.elements['original_price'].value || 0),
         stock_count: parseInt(form.elements['stock_count'].value),
-        weight: form.elements['weight'].value,
-        in_stock: form.elements['in_stock'].checked
+        weight: (document.getElementById('weight-value').value + document.getElementById('weight-unit').value).toLowerCase(),
+        in_stock: form.elements['in_stock'].checked,
+        is_active: form.elements['is_active'].checked
     };
 
     let result;

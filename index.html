@@ -210,20 +210,16 @@
 
             <!-- All Products Page -->
             <div id="page-all-products" class="page">
-                <div class="table-container">
-                    <div class="table-header">
                         <div style="display:flex; gap:10px;">
                             <input type="text" class="form-control" placeholder="Search products..." oninput="filterTable('products-table', this.value)" style="width: 250px;">
-                            <select class="form-control" style="width: auto;">
+                            <select id="product-category-filter" class="form-control" style="width: auto;" onchange="filterProductsByCategory(this.value)">
                                 <option value="">All Categories</option>
-                                <option value="ghee">Ghee & Oils</option>
-                                <option value="honey">Honey & Jaggery</option>
                             </select>
                         </div>
                         <button class="btn btn-primary" onclick="resetProductForm(); navigateTo('add-product')">+ Add Product</button>
                     </div>
                     <table id="products-table">
-                        <thead><tr><th>Image</th><th>Name</th><th>Category</th><th>Price</th><th>Stock</th><th>Status</th><th>Actions</th></tr></thead>
+                        <thead><tr><th>Image</th><th>Name</th><th>Category</th><th>Price</th><th>Stock</th><th>Out of Stock</th><th>Make Project Hide</th><th>Actions</th></tr></thead>
                         <tbody id="products-tbody"></tbody>
                     </table>
                 </div>
@@ -282,11 +278,28 @@
                                 </div>
                                 <div class="grid-2-col" style="gap:10px">
                                     <div class="form-group"><label class="form-label">Stock Count</label><input type="number" name="stock_count" class="form-control" required></div>
-                                    <div class="form-group"><label class="form-label">Weight</label><input type="text" name="weight" class="form-control" placeholder="e.g. 500g"></div>
+                                    <div class="form-group">
+                                        <label class="form-label">Weight</label>
+                                        <div style="display:flex; gap:5px;">
+                                            <input type="number" step="0.01" value="1" id="weight-value" class="form-control" style="flex:1" required>
+                                            <select id="weight-unit" class="form-control" style="width:105px;">
+                                                <option value="kg">kg</option>
+                                                <option value="L">Litre</option>
+                                                <option value="g">g</option>
+                                                <option value="ml">ml</option>
+                                            </select>
+                                        </div>
+                                    </div>
                                 </div>
-                                <div class="form-group">
-                                    <label class="form-label">In Stock</label>
-                                    <label class="switch"><input type="checkbox" name="in_stock" checked><span class="slider"></span></label>
+                                <div class="grid-2-col" style="gap:10px">
+                                    <div class="form-group">
+                                        <label class="form-label">In Stock</label>
+                                        <label class="switch"><input type="checkbox" name="in_stock" checked><span class="slider"></span></label>
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label">Make Project Hide</label>
+                                        <label class="switch"><input type="checkbox" name="is_active" checked><span class="slider"></span></label>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -315,7 +328,18 @@
             <!-- Inventory Page -->
             <div id="page-inventory" class="page">
                 <div class="table-container">
-                    <div class="table-header"><span class="table-title">Inventory Management</span></div>
+                    <div class="table-header">
+                        <span class="table-title">Inventory Management</span>
+                        <div style="display:flex; gap:10px;">
+                            <input type="text" class="form-control" placeholder="Search product..." oninput="filterInventory(this.value)" style="width: 250px;">
+                            <select class="form-control" onchange="filterInventoryByStatus(this.value)" style="width: auto;">
+                                <option value="all">All Status</option>
+                                <option value="good">Good Stock</option>
+                                <option value="low">Low Stock</option>
+                                <option value="out">Out of Stock</option>
+                            </select>
+                        </div>
+                    </div>
                     <table>
                         <thead><tr><th>Product</th><th>Category</th><th>Current Stock</th><th>Status</th><th>Update Stock</th></tr></thead>
                         <tbody id="inventory-tbody"></tbody>

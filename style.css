@@ -551,6 +551,32 @@ tbody tr:last-child td { border-bottom: none; }
 .badge.packed, .badge.shipped { background: var(--purple-bg); color: var(--purple-text); }
 .badge.delivered { background: var(--success-bg); color: var(--success-text); }
 .badge.cancelled { background: var(--danger-bg); color: var(--danger-text); }
+.badge.success { background: var(--success-bg); color: var(--success-text); }
+.badge.warning { background: var(--warning-bg); color: var(--warning-text); }
+.badge.danger { background: var(--danger-bg); color: var(--danger-text); }
+.badge.info { background: var(--info-bg); color: var(--info-text); }
+
+/* Small Spinner */
+.spinner-sm {
+    width: 16px;
+    height: 16px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    display: inline-block;
+}
+
+.stock-ctrl button:hover {
+    background-color: #f1f5f9;
+    color: var(--primary);
+}
+
+.stock-ctrl input::-webkit-outer-spin-button,
+.stock-ctrl input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
 
 /* Buttons */
 .btn {
