@@ -131,15 +131,12 @@ function getUnitPrice(price, wt) {
     const nm = w.match(/[\d.]+/);
     const nVal = nm ? parseFloat(nm[0]) : 0;
     
-    let rate = pVal;
-    let unit = (w.includes('l') && !w.includes('ml')) || w.includes('lit') || w.includes('ml') ? 'L' : 'kg';
-    
     if (nVal > 0) {
-        if (w.includes('ml')) rate = (pVal / nVal) * 1000;
-        else if (w.includes('kg') || (w.includes('l') && !w.includes('ml'))) rate = pVal / nVal;
-        else if (w.includes('g') && !w.includes('kg')) rate = (pVal / nVal) * 1000;
+        if (w.includes('ml')) return { rate: Math.round((pVal / nVal) * 1000), unit: 'L' };
+        if (w.includes('kg') || (w.includes('l') && !w.includes('ml'))) return { rate: Math.round(pVal / nVal), unit: w.includes('l') ? 'L' : 'kg' };
+        if (w.includes('g') && !w.includes('kg')) return { rate: Math.round((pVal / nVal) * 1000), unit: 'kg' };
     }
-    return { rate: Math.round(rate), unit };
+    return { rate: Math.round(pVal), unit: (w.includes('l') || w.includes('ml')) ? 'L' : 'kg' };
 }
 
 async function renderDashboard() {
@@ -226,6 +223,7 @@ async function renderDashboard() {
             document.getElementById('dashboard-recent-orders').innerHTML = orders.slice(0,5).map(o => `
                 <tr>
                     <td>${o.order_number || o.id.toString().substring(0,8)}</td>
+                    <td>${o.customer_name || o.display_name || 'Guest'}</td>
                     <td>₹${(o.total || 0).toLocaleString()}</td>
                     <td><span class="badge ${o.status}">${o.status}</span></td>
                     <td><button class="btn btn-outline" style="padding:4px 8px;font-size:0.75rem" onclick="viewOrder('${o.id}')">View</button></td>
@@ -548,9 +546,23 @@ async function renderCategories() {
         else {
             document.getElementById('categories-tbody').innerHTML = categories.map(c => {
                 const pCount = counts[c.id] || 0;
+                const lowName = (c.name || '').toLowerCase();
+                let iconHtml = '';
+                if (lowName.includes('ghee')) iconHtml = '🍯';
+                else if (lowName.includes('honey')) iconHtml = '🍯';
+                else if (lowName.includes('mango')) iconHtml = '🥭';
+                else if (lowName.includes('spice')) iconHtml = '🌶️';
+                else if (lowName.includes('oil')) iconHtml = '🧴';
+                else if (lowName.includes('beverage')) iconHtml = '🥤';
+
                 return `
                 <tr>
-                    <td><strong>${c.name}</strong></td>
+                    <td>
+                        <div style="display:flex; align-items:center; gap:10px;">
+                            <span style="font-size:1.5rem">${iconHtml}</span>
+                            <strong>${c.name}</strong>
+                        </div>
+                    </td>
                     <td>${c.slug}</td>
                     <td><span class="badge ${pCount > 0 ? 'info' : ''}" style="text-transform:none"> ${pCount} Products</span></td>
                     <td>
@@ -1119,19 +1131,36 @@ async function viewOrder(id) {
     }
     activeOrderId = id;
     document.getElementById('om-title').innerText = `Order ${o.order_number || o.id.toString().substring(0,8)}`;
-    document.getElementById('om-customer').innerText = o.display_name;
-    document.getElementById('om-phone').innerText = o.profile?.phone || o.address?.phone || '-';
+    document.getElementById('om-customer').innerText = o.display_name || o.customer_name || 'Guest';
+    document.getElementById('om-phone').innerText = o.phone || o.profile?.phone || o.address?.phone || '-';
     
     // Show Full Shipping Address
     const addrDiv = document.getElementById('om-full-address');
     if(addrDiv) {
-        if(o.address) {
+        const hasDetailedAddress = o.address && (o.address.address_line || o.address.city);
+        
+        if(hasDetailedAddress) {
+            const city = o.address.city || '';
+            const state = o.address.state || '';
+            const pin = o.address.pincode || '';
+            
+            // Hide placeholders like "Guest", "Order", or "000000"
+            const showCityState = (city && city.toLowerCase() !== 'guest') || (state && state.toLowerCase() !== 'order');
+            const showPin = pin && pin !== '000000';
+
             addrDiv.innerHTML = `
-                ${o.address.address_line}<br>
-                ${o.address.city}, ${o.address.state} - ${o.address.pincode}
+                <div style="color:var(--text-main); font-weight:700; margin-bottom:4px">Shipping Address:</div>
+                ${o.address.full_name || o.customer_name || o.display_name || 'Guest'}<br>
+                ${o.address.address_line || ''}<br>
+                ${showCityState ? (city + (state ? ', ' + state : '')) : ''}${showPin ? (showCityState ? ' - ' : '') + pin : ''}
             `;
         } else {
-            addrDiv.innerText = 'No shipping address found';
+            // Fallback to order-level address string
+            const directAddr = o.address_text || o.address_line || o.address || 'No address provided';
+            addrDiv.innerHTML = `
+                <div style="color:var(--text-main); font-weight:700; margin-bottom:4px">Shipping Address:</div>
+                <div style="font-size:0.95rem; line-height:1.5;">${directAddr}</div>
+            `;
         }
     }
 
@@ -1159,19 +1188,43 @@ async function viewOrder(id) {
     // Attempt to load order items if the view supports it:
     const itemsContainer = document.getElementById('om-items');
     if(itemsContainer) {
-        itemsContainer.innerHTML = 'Loading items...';
-        const { data: items } = await supabaseClient.from('order_items').select('*').eq('order_id', id);
-        if(items) {
-            itemsContainer.innerHTML = items.map(i => `
-                <div style="display:flex; align-items:center; gap:12px; padding:8px; background:white; border-radius:10px; border:1px solid var(--border-color)">
-                    <img src="${i.product_image || 'https://placehold.co/50'}" style="width:40px; height:40px; border-radius:8px; object-fit:cover;">
-                    <div style="flex:1">
-                        <div style="font-weight:600; color:var(--text-main)">${i.product_name}</div>
-                        <div style="font-size:0.8rem; color:var(--text-muted)">${i.quantity} x ₹${i.unit_price}</div>
-                    </div>
-                    <div style="font-weight:700; color:var(--primary)">₹${i.total_price}</div>
-                </div>
-            `).join('');
+        itemsContainer.innerHTML = '<div style="padding:10px; text-align:center;"><i class="ph ph-circle-notch spinner"></i> Loading harvest...</div>';
+        
+        try {
+            const { data: items, error: itemsErr } = await supabaseClient.from('order_items').select('*').eq('order_id', id);
+            
+            if(itemsErr) throw itemsErr;
+            
+            if(!items || items.length === 0) {
+                itemsContainer.innerHTML = '<div style="padding:10px; color:#94a3b8; font-style:italic;">No items found for this order.</div>';
+            } else {
+                itemsContainer.innerHTML = items.map(i => {
+                    // Logic to find image since it might not be in order_items
+                    let img = 'https://placehold.co/100?text=Farmmily';
+                    if (i.product_id) {
+                        const lp = allProducts.find(x => x.id == i.product_id);
+                        if (lp && lp.image_url) img = lp.image_url;
+                    }
+
+                    return `
+                        <div style="display:flex; align-items:center; gap:12px; padding:12px; background:white; border-radius:12px; border:1px solid var(--border-color); box-shadow: 0 2px 4px rgba(0,0,0,0.02)">
+                            <img src="${img}" style="width:50px; height:50px; border-radius:10px; object-fit:cover; border: 1px solid #eee;">
+                            <div style="flex:1">
+                                <div style="font-weight:700; color:var(--text-main); font-size:0.95rem">${i.product_name}</div>
+                                <div style="font-size:0.8rem; color:#6b7280; font-weight:500; margin-top:2px;">
+                                    ${i.quantity} x ₹${i.unit_price} 
+                                    ${i.weight ? `(${i.weight})` : ''}
+                                </div>
+                                ${i.description ? `<div style="font-size:0.8rem; color:#059669; font-weight:600; margin-top:4px; padding:4px 8px; background:#ecfdf5; border-radius:6px; display:inline-block;">${i.description}</div>` : ''}
+                            </div>
+                            <div style="font-weight:800; color:var(--primary); font-size:1rem">₹${i.total_price}</div>
+                        </div>
+                    `;
+                }).join('');
+            }
+        } catch (err) {
+            console.error("Items load error:", err);
+            itemsContainer.innerHTML = '<div style="padding:10px; color:#ef4444; font-size:0.8rem;">Error loading items.</div>';
         }
     }
 
