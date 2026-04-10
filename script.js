@@ -822,16 +822,25 @@ async function renderOrders(filterText = '') {
 
         if(filtered.length === 0) showEmpty('orders-tbody');
         else {
-            document.getElementById('orders-tbody').innerHTML = filtered.map(o => `
+            document.getElementById('orders-tbody').innerHTML = filtered.map(o => {
+                const payStatus = (o.payment_status || 'pending').toLowerCase();
+                const payBadgeColor = payStatus === 'paid' ? '#10b981' : '#f59e0b';
+                
+                return `
                 <tr>
                     <td>${o.order_number || o.id.toString().substring(0,8)}</td>
-                    <td>₹${o.total}</td>
-                    <td>${o.payment_method || 'N/A'}</td>
+                    <td>₹${(o.total || 0).toLocaleString()}</td>
+                    <td>
+                        <div style="display:flex; flex-direction:column;">
+                            <span style="font-size:0.85rem; font-weight:700;">${o.payment_method || 'Online'}</span>
+                            <span style="font-size:0.7rem; color:${payBadgeColor}; font-weight:800; text-transform:uppercase;">● ${payStatus}</span>
+                        </div>
+                    </td>
                     <td><span class="badge ${(o.status || '').toLowerCase()}">${o.status}</span></td>
-                    <td>${o.created_at ? new Date(o.created_at).toLocaleDateString() : '-'}</td>
-                    <td><button class="btn btn-outline" onclick="viewOrder('${o.id}')">View</button></td>
+                    <td>${o.created_at ? new Date(o.created_at).toLocaleDateString('en-IN', {day:'2-digit',month:'short'}) : '-'}</td>
+                    <td><button class="btn btn-outline" style="padding:4px 10px;" onclick="viewOrder('${o.id}')">View</button></td>
                 </tr>
-            `).join('');
+            `}).join('');
         }
     } catch(err) { 
         showToast("Error loading orders data: " + (err.message || err), 'error'); 
@@ -1169,11 +1178,24 @@ async function viewOrder(id) {
     if(rpDiv) {
         const { data: payments } = await supabaseClient.from('payments').select('*').eq('order_id', id).limit(1);
         const p = payments?.[0];
-        if(p && p.razorpay_order_id) {
+        if(p && p.razorpay_payment_id) {
             rpDiv.innerHTML = `
-                <div style="font-size:0.8rem; margin-top:10px; padding:10px; background:#eff6ff; border-radius:8px">
-                    <div><strong>RP Order:</strong> ${p.razorpay_order_id}</div>
-                    <div><strong>RP Payment:</strong> ${p.razorpay_payment_id || 'Pending'}</div>
+                <div style="margin-top:15px; padding:12px; background:#f0f9ff; border-radius:12px; border:1px solid #bae6fd;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                        <span style="font-size:0.75rem; font-weight:800; color:#0369a1; text-transform:uppercase; letter-spacing:0.5px;">Razorpay Live Payment</span>
+                        <span style="background:#0ea5e9; color:white; font-size:0.65rem; padding:2px 8px; border-radius:20px; font-weight:800;">Captured</span>
+                    </div>
+                    <div style="font-size:0.85rem; color:#0c4a6e;">
+                        <div style="margin-bottom:4px;"><strong>Payment ID:</strong> <span style="font-family:monospace;">${p.razorpay_payment_id}</span></div>
+                        <div style="margin-bottom:4px;"><strong>Method:</strong> ${p.method || 'Online'}</div>
+                        <div><strong>Amount:</strong> ₹${p.amount}</div>
+                    </div>
+                </div>
+            `;
+        } else if (o.payment_method === 'cod') {
+            rpDiv.innerHTML = `
+                <div style="margin-top:15px; padding:12px; background:#fefce8; border-radius:12px; border:1px solid #fef08a;">
+                    <span style="font-size:0.75rem; font-weight:800; color:#854d0e; text-transform:uppercase;">Cash on Delivery</span>
                 </div>
             `;
         } else {
