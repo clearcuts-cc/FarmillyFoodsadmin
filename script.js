@@ -9,6 +9,7 @@ let allCategories = [];
 let allOrders = [];
 let currentOrderFilter = 'all';
 let notifications = [];
+let currentModalOrder = null;
 
 // --- Auth Logic ---
 document.addEventListener('DOMContentLoaded', () => {
@@ -49,7 +50,7 @@ function handleLogout() {
 function showAdminContent() {
     document.getElementById('login-screen').style.display = 'none';
     document.getElementById('sidebar').style.display = 'flex';
-    document.getElementById('main-wrapper').style.display = 'block';
+    document.getElementById('main-wrapper').style.display = 'flex';
     document.body.classList.remove('show-login');
     renderDashboard();
     fetchDeliveryConfig();
@@ -1274,9 +1275,11 @@ document.querySelectorAll('.tab-link').forEach(link => {
     });
 });
 
+window.currentModalOrder = null;
 let activeOrderId = null;
 async function viewOrder(id) {
     let o = allOrders.find(x => x.id == id);
+    currentModalOrder = o;
     
     if(!o) {
         // Fetch from Supabase if not in local cache
@@ -1383,10 +1386,7 @@ async function viewOrder(id) {
             
             if(itemsErr) throw itemsErr;
             
-            if(!items || items.length === 0) {
-                itemsContainer.innerHTML = '<div style="padding:10px; color:#94a3b8; font-style:italic;">No items found for this order.</div>';
-            } else {
-                itemsContainer.innerHTML = items.map(i => {
+                const itemsHtml = items.map(i => {
                     // Use stored image if available, fallback to product search
                     let img = i.product_image || 'https://placehold.co/100?text=Farmmily';
                     if (!i.product_image && i.product_id) {
@@ -1409,6 +1409,35 @@ async function viewOrder(id) {
                         </div>
                     `;
                 }).join('');
+
+                // Calculate Delivery Fee if not explicitly stored
+                const subtotal = items.reduce((acc, curr) => acc + parseFloat(curr.total_price || 0), 0);
+                const deliveryFee = o.total - subtotal;
+                
+                let deliveryHtml = '';
+                if (deliveryFee > 0) {
+                    deliveryHtml = `
+                        <div style="display:flex; justify-content:space-between; align-items:center; padding:12px; background:#f8fafc; border-radius:12px; border:1px dashed #cbd5e1; margin-top:8px;">
+                            <div style="display:flex; align-items:center; gap:10px;">
+                                <i class="ph ph-truck" style="font-size:1.2rem; color:#64748b;"></i>
+                                <span style="font-size:0.9rem; font-weight:600; color:#475569;">Delivery Charge</span>
+                            </div>
+                            <div style="font-weight:700; color:#475569; font-size:1rem">₹${Math.round(deliveryFee)}</div>
+                        </div>
+                    `;
+                } else if (subtotal > 0) {
+                     deliveryHtml = `
+                        <div style="display:flex; justify-content:space-between; align-items:center; padding:12px; background:#f0fdf4; border-radius:12px; border:1px dashed #bbf7d0; margin-top:8px;">
+                            <div style="display:flex; align-items:center; gap:10px;">
+                                <i class="ph ph-seal-check" style="font-size:1.2rem; color:#22c55e;"></i>
+                                <span style="font-size:0.9rem; font-weight:600; color:#166534;">Free Delivery</span>
+                            </div>
+                            <div style="font-weight:800; color:#22c55e; font-size:0.8rem; text-transform:uppercase;">Applied</div>
+                        </div>
+                    `;
+                }
+
+                itemsContainer.innerHTML = itemsHtml + deliveryHtml;
             }
         } catch (err) {
             console.error("Items load error:", err);
@@ -1686,75 +1715,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 });
-
-// --- Auth Handling ---
-function runAuthCheck() {
-    if(localStorage.getItem('admin_logged_in') === 'true') {
-        const body = document.body;
-        const loginScreen = document.getElementById('login-screen');
-        const sidebar = document.getElementById('sidebar');
-        const mainWrapper = document.getElementById('main-wrapper');
-        
-        if (body && loginScreen && sidebar && mainWrapper) {
-            body.classList.remove('show-login');
-            loginScreen.style.display = 'none';
-            sidebar.style.display = 'flex';
-            mainWrapper.style.display = 'flex';
-        }
-    }
-}
-runAuthCheck(); // Run instantly when file is parsed.
-
-function handleLogin() {
-    const emailInput = document.getElementById('login-email');
-    const passwordInput = document.getElementById('login-password');
-    const errorMsg = document.getElementById('login-error-msg');
-    
-    // Reset previous error
-    if(errorMsg) errorMsg.style.display = 'none';
-
-    // Trim values to remove any accidental leading/trailing spaces
-    const enteredEmail = emailInput.value.trim().toLowerCase();
-    const enteredPassword = passwordInput.value.trim();
-    
-    const correctEmail = 'admin@farmmily.com';
-    const correctPassword = 'password123';
-
-    if (enteredEmail === correctEmail && enteredPassword === correctPassword) {
-        localStorage.setItem('admin_logged_in', 'true');
-        document.body.classList.remove('show-login');
-        document.getElementById('login-screen').style.display = 'none';
-        document.getElementById('sidebar').style.display = 'flex';
-        document.getElementById('main-wrapper').style.display = 'flex';
-        showToast('Login successful! Welcome Admin.');
-        
-        // Trigger all manual loads so user doesn't have to refresh
-        loadCategoryOptions();
-        renderDashboard();
-        renderProducts();
-        renderCategories();
-        renderInventory();
-        renderOrders();
-        renderCustomers();
-        renderCoupons();
-        renderReviews();
-        renderBanners();
-        setupChart();
-    } else {
-        if(errorMsg) errorMsg.style.display = 'block';
-        showToast('Access Denied. Check credentials.', 'error');
-        console.log("Login failed for:", enteredEmail);
-    }
-}
-
-function handleLogout() {
-    localStorage.removeItem('admin_logged_in');
-    document.body.classList.add('show-login');
-    document.getElementById('login-screen').style.display = 'flex';
-    document.getElementById('sidebar').style.display = 'none';
-    document.getElementById('main-wrapper').style.display = 'none';
-    showToast('Logged out successfully.');
-}
 
 // --- Reviews CRUD ---
 function openReviewModal() {
@@ -2256,6 +2216,73 @@ function clearNotifications(e) {
     updateNotifUI();
     const dropdown = document.getElementById('notif-dropdown');
     if(dropdown) dropdown.style.display = 'none';
+}
+
+async function printInvoice() {
+    if(!currentModalOrder) return;
+    const o = currentModalOrder;
+    
+    // Populate template
+    document.getElementById('inv-num').innerText = `INV-${o.order_number || o.id.toString().substring(0,8).toUpperCase()}`;
+    document.getElementById('inv-date').innerText = `Date: ${new Date(o.created_at).toLocaleDateString()}`;
+    document.getElementById('inv-cust-name').innerText = o.display_name || o.customer_name || 'Guest';
+    document.getElementById('inv-cust-phone').innerText = o.phone || '';
+    
+    const addr = o.address_text || o.address_line || (o.address ? `${o.address.address_line || ''}, ${o.address.city || ''}` : 'No address provided');
+    document.getElementById('inv-cust-addr').innerText = addr;
+    document.getElementById('inv-pay-method').innerText = o.payment_method || 'N/A';
+    
+    // Items
+    const tbody = document.getElementById('inv-items-body');
+    const { data: items } = await supabaseClient.from('order_items').select('*').eq('order_id', o.id);
+    
+    let subtotal = 0;
+    if(items && items.length > 0) {
+        tbody.innerHTML = items.map(i => {
+            subtotal += parseFloat(i.total_price);
+            return `
+                <tr style="border-bottom:1px solid #f1f5f9">
+                    <td style="padding:12px; font-size:14px">${i.product_name} ${i.weight ? `(${i.weight})` : ''}</td>
+                    <td style="padding:12px; text-align:center; font-size:14px">${i.quantity}</td>
+                    <td style="padding:12px; text-align:right; font-size:14px">₹${i.unit_price}</td>
+                    <td style="padding:12px; text-align:right; font-size:14px; font-weight:600">₹${i.total_price}</td>
+                </tr>
+            `;
+        }).join('');
+    } else {
+        tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:20px">No items found</td></tr>';
+        subtotal = o.total;
+    }
+
+    const delivery = o.delivery_fee || 0;
+    document.getElementById('inv-subtotal').innerText = `₹${subtotal}`;
+    document.getElementById('inv-delivery').innerText = delivery > 0 ? `₹${delivery}` : 'FREE';
+    document.getElementById('inv-total').innerText = `₹${o.total}`;
+
+    // Print
+    const content = document.getElementById('invoice-template').innerHTML;
+    const printWindow = window.open('', '_blank');
+    printWindow.document.write(`<html><head><title>Invoice - ${o.order_number}</title></head><body>${content}</body></html>`);
+    printWindow.document.close();
+    setTimeout(() => {
+        printWindow.print();
+    }, 500);
+}
+
+function sendInvoice() {
+    if(!currentModalOrder) return;
+    const o = currentModalOrder;
+    const phone = o.phone || (o.address ? o.address.phone : '') || '';
+    if(!phone) {
+        showToast("No phone number found for this customer", "error");
+        return;
+    }
+
+    const cleanPhone = phone.replace(/\D/g, '');
+    const msg = `Namaste! 🙏 Your order #${o.order_number || o.id} from Farmmily Farms is being processed. 🥭\n\nTotal Amount: ₹${o.total}\nStatus: ${o.status.toUpperCase()}\n\nYou can track your order here: https://farmmily.web.app/track?id=${o.id}\n\nThank you for supporting heritage harvests! 🍃`;
+    
+    const url = `https://wa.me/${cleanPhone.length === 10 ? '91'+cleanPhone : cleanPhone}?text=${encodeURIComponent(msg)}`;
+    window.open(url, '_blank');
 }
 
 // Start Setup
