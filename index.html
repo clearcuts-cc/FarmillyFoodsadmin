@@ -960,15 +960,19 @@
             location.reload();
         }
 
-        document.addEventListener('DOMContentLoaded', function() {
+        // Run immediately — DOM is already available since this script is at bottom of body
+        (function() {
             var togglePass = document.getElementById('toggle-password');
             if (togglePass) {
                 togglePass.addEventListener('click', function() {
                     var passInput = document.getElementById('login-password');
-                    var type = passInput.getAttribute('type') === 'password' ? 'text' : 'password';
-                    passInput.setAttribute('type', type);
-                    togglePass.classList.toggle('ph-eye');
-                    togglePass.classList.toggle('ph-eye-slash');
+                    if (passInput.type === 'password') {
+                        passInput.type = 'text';
+                        togglePass.className = 'ph ph-eye-slash';
+                    } else {
+                        passInput.type = 'password';
+                        togglePass.className = 'ph ph-eye';
+                    }
                 });
             }
             if (localStorage.getItem('adminLoggedIn') === 'true') {
@@ -977,7 +981,7 @@
                 document.getElementById('sidebar').style.display = 'flex';
                 document.getElementById('main-wrapper').style.display = 'flex';
             }
-        });
+        })();
     </script>
     <script src="script.js"></script>
 </body>
