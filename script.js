@@ -1330,29 +1330,56 @@ async function viewOrder(id) {
     // Show Full Shipping Address
     const addrDiv = document.getElementById('om-full-address');
     if(addrDiv) {
-        const hasDetailedAddress = o.address && (o.address.address_line || o.address.city);
-        
-        if(hasDetailedAddress) {
-            const city = o.address.city || '';
-            const state = o.address.state || '';
-            const pin = o.address.pincode || '';
+        let addrData = o.address;
+        if(!addrData && o.address_id) {
+             const { data: a } = await supabaseClient.from('addresses').select('*').eq('id', o.address_id).single();
+             addrData = a;
+        }
+
+        if(addrData && (addrData.address_line || addrData.city)) {
+            const city = addrData.city || '';
+            const state = addrData.state || '';
+            const pin = addrData.pincode || '';
+            const mapLink = addrData.map_link || '';
             
+            // Extract map link from string if it exists in legacy format
+            let extractedMap = mapLink;
+            if(!extractedMap && addrData.address_line && addrData.address_line.includes('(Map:')) {
+                const match = addrData.address_line.match(/\(Map: (.*?)\)/);
+                if(match) extractedMap = match[1];
+            }
+            if(!extractedMap && o.address && typeof o.address === 'string' && o.address.includes('(Map:')) {
+                const match = o.address.match(/\(Map: (.*?)\)/);
+                if(match) extractedMap = match[1];
+            }
+
             // Hide placeholders like "Guest", "Order", or "000000"
-            const showCityState = (city && city.toLowerCase() !== 'guest') || (state && state.toLowerCase() !== 'order');
-            const showPin = pin && pin !== '000000';
+            const showCityState = (city && city.toLowerCase() !== 'guest' && city.toLowerCase() !== 'order');
+            const showPin = pin && pin !== '000000' && pin !== '';
+
+            // Formatting address line: remove Map link part if we are showing it separately
+            let displayLine = addrData.address_line || '';
+            if(displayLine.includes('(Map:')) displayLine = displayLine.split('(Map:')[0].trim().replace(/,$/, '');
 
             addrDiv.innerHTML = `
-                <div style="color:var(--text-main); font-weight:700; margin-bottom:4px">Shipping Address:</div>
-                ${o.address.full_name || o.customer_name || o.display_name || 'Guest'}<br>
-                ${o.address.address_line || ''}<br>
-                ${showCityState ? (city + (state ? ', ' + state : '')) : ''}${showPin ? (showCityState ? ' - ' : '') + pin : ''}
+                <div style="color:var(--text-main); font-weight:700; margin-bottom:10px; display:flex; justify-content:space-between; align-items:flex-start;">
+                    <span>Shipping Address:</span>
+                    ${extractedMap ? `<a href="${extractedMap}" target="_blank" class="btn btn-primary" style="padding:4px 10px; font-size:0.7rem; display:flex; align-items:center; gap:5px; border-radius:30px;"><i class="ph ph-map-pin"></i> Open Maps</a>` : ''}
+                </div>
+                <div style="font-size:1rem; line-height:1.6; background:#f8fafc; padding:15px; border-radius:12px; border:1px solid #e2e8f0;">
+                    <div style="font-weight:700; color:var(--primary-dark); margin-bottom:4px;">${addrData.full_name || o.customer_name || o.display_name || 'Guest'}</div>
+                    <div style="color:#475569;">${displayLine}</div>
+                    <div style="font-weight:600; color:#1e293b; margin-top:2px;">
+                        ${showCityState ? (city + (state ? ', ' + state : '')) : ''}${showPin ? (showCityState ? ' - ' : '') + pin : ''}
+                    </div>
+                </div>
             `;
         } else {
             // Fallback to order-level address string
-            const directAddr = o.address_text || o.address_line || o.address || 'No address provided';
+            const directAddr = o.address_text || o.address_line || (typeof o.address === 'string' ? o.address : '') || 'No address provided';
             addrDiv.innerHTML = `
                 <div style="color:var(--text-main); font-weight:700; margin-bottom:4px">Shipping Address:</div>
-                <div style="font-size:0.95rem; line-height:1.5;">${directAddr}</div>
+                <div style="font-size:1rem; line-height:1.5; background:#f8fafc; padding:12px; border-radius:12px; border:1px dashed #cbd5e1;">${directAddr}</div>
             `;
         }
     }
@@ -2033,6 +2060,50 @@ async function updateCorpStatus() {
     }
 }
 
+function sendCorpQuotation() {
+    if(!viewingCorpOrderId) return;
+    const o = allCorpOrders.find(x => String(x.id) === String(viewingCorpOrderId));
+    if(!o) return;
+
+    const phone = o.contact_phone || o.phone || '';
+    if(!phone) {
+        showToast("No phone number found", "error");
+        return;
+    }
+
+    const cleanPhone = phone.replace(/\D/g, '');
+    const mix = [];
+    if (o.imam_qty) mix.push(`• Imam Pasand: ${o.imam_qty}kg`);
+    if (o.alph_qty) mix.push(`• Alphonso: ${o.alph_qty}kg`);
+    if (o.bang_qty) mix.push(`• Banganapalli: ${o.bang_qty}kg`);
+    if (o.sent_qty) mix.push(`• Senthura: ${o.sent_qty}kg`);
+
+    const msg = `*Quotation: Farmmily Corporate Gifting* 🏢🥭
+
+*Company:* ${o.company_name}
+*Enquiry Ref:* ${o.enquiry_ref || '#' + o.id}
+
+*Order Details:*
+----------------------------
+*Crate Size:* ${o.crate_size}kg Box
+*Total Units:* ${o.total_units} Crates
+*Mango Mix (per box):*
+${mix.length ? mix.join('\n') : '• Heritage Selection Mix'}
+
+*Pricing Summary:*
+*ESTIMATED TOTAL:* ₹${(o.total_amount || 0).toLocaleString('en-IN')}
+----------------------------
+${o.heritage_message ? `*Heritage Card Msg:* "${o.heritage_message}"\n` : ''}
+*Status:* ${o.status.toUpperCase()}
+
+Namaste! 🙏 We are ready to harvest this special batch for your team. Please let us know if you have any adjustments.
+
+*Farmmily Estate Team* 🍃`;
+    
+    const url = `https://wa.me/${cleanPhone.length === 10 ? '91'+cleanPhone : cleanPhone}?text=${encodeURIComponent(msg)}`;
+    window.open(url, '_blank');
+}
+
 async function saveCorpOrder() {
     const form = document.getElementById('corp-order-form');
     if (!form) return;
@@ -2284,7 +2355,7 @@ async function printInvoice() {
     }, 500);
 }
 
-function sendInvoice() {
+async function sendInvoice() {
     if(!currentModalOrder) return;
     const o = currentModalOrder;
     const phone = o.phone || (o.address ? o.address.phone : '') || '';
@@ -2293,8 +2364,38 @@ function sendInvoice() {
         return;
     }
 
+    showToast("Generating itemized invoice message...", "info");
+    
+    // Fetch items for the breakdown
+    const { data: items } = await supabaseClient.from('order_items').select('*').eq('order_id', o.id);
+    
+    let itemText = '';
+    if(items && items.length > 0) {
+        itemText = items.map(i => `• ${i.product_name} ${i.weight ? `(${i.weight})` : ''} x ${i.quantity} = ₹${i.total_price}`).join('\n');
+    }
+
     const cleanPhone = phone.replace(/\D/g, '');
-    const msg = `Namaste! 🙏 Your order #${o.order_number || o.id} from Farmmily Farms is being processed. 🥭\n\nTotal Amount: ₹${o.total}\nStatus: ${o.status.toUpperCase()}\n\nYou can track your order here: https://farmmily.web.app/track?id=${o.id}\n\nThank you for supporting heritage harvests! 🍃`;
+    const orderRef = o.order_number || o.id.toString().substring(0,8).toUpperCase();
+    
+    const msg = `*Namaste!* 🙏 
+
+Your order *#${orderRef}* from *Farmmily Farms* is confirmed and being processed! 🥭🍃
+
+*INV-SUMMARY:*
+----------------------------
+${itemText || 'Order Summary: ₹' + o.total}
+----------------------------
+*Subtotal:* ₹${o.subtotal || o.total - (o.delivery_charge || 0)}
+*Delivery:* ${o.delivery_charge > 0 ? '₹'+o.delivery_charge : 'FREE'}
+*TOTAL AMOUNT:* ₹${o.total}
+
+*Payment Status:* ${o.payment_status?.toUpperCase() || 'PAID'}
+*Delivery Status:* ${o.status.toUpperCase()}
+
+📄 *View Digital Invoice & Track:*
+https://farmmily.web.app/track?id=${o.id}
+
+Thank you for choosing heritage harvests and supporting natural farming! 🚜✨`;
     
     const url = `https://wa.me/${cleanPhone.length === 10 ? '91'+cleanPhone : cleanPhone}?text=${encodeURIComponent(msg)}`;
     window.open(url, '_blank');
