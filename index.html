@@ -5,7 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Farmmily Farms Admin</title>
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"
+        onerror="console.error('❌ Supabase CDN FAILED to load! Trying fallback...'); var s=document.createElement('script');s.src='https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.min.js';document.head.appendChild(s);"
+        onload="console.log('✅ Supabase CDN loaded OK')"></script>
     <link rel="stylesheet" href="style.css">
 </head>
 <body class="show-login">
@@ -925,6 +927,58 @@
         </div>
     </div>
 
+    <script>
+        // --- INLINE AUTH SCRIPT ---
+        function handleLogin() {
+            var email = document.getElementById('login-email').value.trim();
+            var pass = document.getElementById('login-password').value;
+            var errorEl = document.getElementById('login-error-msg');
+
+            if (email === 'admin@farmmily.com' && pass === 'Admin#123') {
+                localStorage.setItem('adminLoggedIn', 'true');
+                document.getElementById('login-screen').style.display = 'none';
+                document.body.classList.remove('show-login');
+                document.getElementById('sidebar').style.display = 'flex';
+                document.getElementById('main-wrapper').style.display = 'flex';
+                function tryLoadData() {
+                    if (typeof showAdminContent === 'function' && typeof supabaseClient !== 'undefined' && supabaseClient !== null) {
+                        showAdminContent();
+                        if (typeof showToast === 'function') showToast('Welcome back, Admin!');
+                    } else {
+                        setTimeout(tryLoadData, 300);
+                    }
+                }
+                tryLoadData();
+            } else {
+                errorEl.style.display = 'block';
+                setTimeout(function() { errorEl.style.display = 'none'; }, 3000);
+            }
+        }
+
+        function handleLogout() {
+            localStorage.removeItem('adminLoggedIn');
+            location.reload();
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            var togglePass = document.getElementById('toggle-password');
+            if (togglePass) {
+                togglePass.addEventListener('click', function() {
+                    var passInput = document.getElementById('login-password');
+                    var type = passInput.getAttribute('type') === 'password' ? 'text' : 'password';
+                    passInput.setAttribute('type', type);
+                    togglePass.classList.toggle('ph-eye');
+                    togglePass.classList.toggle('ph-eye-slash');
+                });
+            }
+            if (localStorage.getItem('adminLoggedIn') === 'true') {
+                document.getElementById('login-screen').style.display = 'none';
+                document.body.classList.remove('show-login');
+                document.getElementById('sidebar').style.display = 'flex';
+                document.getElementById('main-wrapper').style.display = 'flex';
+            }
+        });
+    </script>
     <script src="script.js"></script>
 </body>
 </html>

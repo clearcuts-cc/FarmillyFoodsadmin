@@ -36,6 +36,7 @@
     --radius-sm: 8px;
     --radius-md: 14px;
     --radius-lg: 20px;
+    --radius-xl: 24px;
     
     /* Animation Timing */
     --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
@@ -950,6 +951,11 @@ input:checked + .slider:before { transform: translateX(22px); }
     background: var(--text-main); color: white; padding: 4px 8px; border-radius: 6px;
 }
 .bar:hover span { opacity: 1; top: -40px; }
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
 
 /* =========================================================================
    LOGIN SCREEN (PREMIUM EXPERENCE)

@@ -1,7 +1,20 @@
 // --- Supabase Setup ---
 const supabaseUrl = 'https://jztreusepxilnfqffwka.supabase.co';
 const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp6dHJldXNlcHhpbG5mcWZmd2thIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ4NzA5OTUsImV4cCI6MjA5MDQ0Njk5NX0.AXaOi_ax6esifM7DzwVjNXQrm3XLNPnzT_0yQWm6ahY';
-const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
+let supabaseClient = null;
+
+function initSupabase() {
+    if (supabaseClient) return true;
+    if (window.supabase && window.supabase.createClient) {
+        supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
+        console.log('✅ Supabase initialized successfully');
+        return true;
+    }
+    return false;
+}
+
+// Try immediately
+initSupabase();
 
 // --- Global State ---
 let allProducts = [];
@@ -11,56 +24,41 @@ let currentOrderFilter = 'all';
 let notifications = [];
 let currentModalOrder = null;
 
-// --- Auth Logic ---
+// --- Boot: wait for Supabase then load data ---
 document.addEventListener('DOMContentLoaded', () => {
-    const togglePass = document.getElementById('toggle-password');
-    if (togglePass) {
-        togglePass.addEventListener('click', () => {
-            const passInput = document.getElementById('login-password');
-            const type = passInput.getAttribute('type') === 'password' ? 'text' : 'password';
-            passInput.setAttribute('type', type);
-            togglePass.classList.toggle('ph-eye');
-            togglePass.classList.toggle('ph-eye-slash');
-        });
+    console.log('📦 DOMContentLoaded fired');
+    function bootAdmin() {
+        console.log('🔧 bootAdmin: attempting initSupabase...');
+        if (!initSupabase()) {
+            console.log('⏳ Supabase CDN not ready, retrying in 300ms...');
+            setTimeout(bootAdmin, 300);
+            return;
+        }
+        console.log('✅ bootAdmin: Supabase ready! adminLoggedIn:', localStorage.getItem('adminLoggedIn'));
+        // Supabase is ready — if logged in, load dashboard
+        if (localStorage.getItem('adminLoggedIn') === 'true') {
+            showAdminContent();
+        }
     }
-    checkAuth();
+    bootAdmin();
 });
 
-function handleLogin() {
-    const email = document.getElementById('login-email').value;
-    const pass = document.getElementById('login-password').value;
-    const errorEl = document.getElementById('login-error-msg');
-
-    // Simple Admin Auth (In production, use Supabase Auth)
-    if (email === 'admin@farmmily.com' && pass === 'Admin#123') {
-        localStorage.setItem('adminLoggedIn', 'true');
-        showAdminContent();
-        showToast('Welcome back, Admin! 👋');
-    } else {
-        errorEl.style.display = 'block';
-        setTimeout(() => { errorEl.style.display = 'none'; }, 3000);
-    }
-}
-
-function handleLogout() {
-    localStorage.removeItem('adminLoggedIn');
-    location.reload();
-}
-
 function showAdminContent() {
+    console.log('🏠 showAdminContent called, supabaseClient:', supabaseClient ? 'ready' : 'NULL');
     document.getElementById('login-screen').style.display = 'none';
     document.getElementById('sidebar').style.display = 'flex';
     document.getElementById('main-wrapper').style.display = 'flex';
     document.body.classList.remove('show-login');
-    renderDashboard();
-    fetchDeliveryConfig();
-}
-
-function checkAuth() {
-    if (localStorage.getItem('adminLoggedIn') === 'true') {
-        showAdminContent();
+    if (supabaseClient) {
+        console.log('📊 Calling renderDashboard, fetchDeliveryConfig, loadCategoryOptions...');
+        renderDashboard();
+        fetchDeliveryConfig();
+        loadCategoryOptions();
+    } else {
+        console.error('❌ showAdminContent: supabaseClient is NULL, data will not load!');
     }
 }
+
 
 // --- Navigation Logic ---
 function navigateTo(pageId) {
@@ -275,6 +273,17 @@ async function renderDelivery() {
 }
 
 async function renderDashboard() {
+    console.log('🔄 renderDashboard called, supabaseClient:', supabaseClient ? 'ready' : 'NULL');
+    
+    // Ensure supabase is initialized
+    if (!supabaseClient) {
+        initSupabase();
+        if (!supabaseClient) {
+            console.error('❌ Cannot render dashboard: supabaseClient is still null');
+            return;
+        }
+    }
+    
     showLoading('dashboard-recent-orders');
     showLoading('dashboard-top-products');
     
@@ -300,6 +309,12 @@ async function renderDashboard() {
         // Corporate Orders (to include in stats)
         const { data: rawCorp, error: cErr } = await supabaseClient.from('corporate_orders').select('*');
         if(cErr) throw cErr;
+
+        // Products for stock stats
+        const { data: rawProducts, error: prErr } = await supabaseClient.from('products').select('*');
+        if(prErr) throw prErr;
+        allProducts = rawProducts || [];
+        const products = allProducts;
 
         // Stats Calc
         let todayOrders = 0;
@@ -363,7 +378,7 @@ async function renderDashboard() {
 
         const lowStockCount = products.filter(p => p.stock_count > 0 && p.stock_count < 20).length;
         if(lowStockCount > 0) {
-            pushNotification(`${lowStockCount} items are running low on stock!`, 'warning');
+            showToast(`${lowStockCount} items are running low on stock!`, 'warning');
         }
 
         // Recent Orders Table
@@ -1438,7 +1453,7 @@ async function viewOrder(id) {
                 }
 
                 itemsContainer.innerHTML = itemsHtml + deliveryHtml;
-            }
+
         } catch (err) {
             console.error("Items load error:", err);
             itemsContainer.innerHTML = '<div style="padding:10px; color:#ef4444; font-size:0.8rem;">Error loading items.</div>';
