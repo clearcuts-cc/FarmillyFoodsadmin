@@ -8,6 +8,58 @@ let allProducts = [];
 let allCategories = [];
 let allOrders = [];
 let currentOrderFilter = 'all';
+let notifications = [];
+
+// --- Auth Logic ---
+document.addEventListener('DOMContentLoaded', () => {
+    const togglePass = document.getElementById('toggle-password');
+    if (togglePass) {
+        togglePass.addEventListener('click', () => {
+            const passInput = document.getElementById('login-password');
+            const type = passInput.getAttribute('type') === 'password' ? 'text' : 'password';
+            passInput.setAttribute('type', type);
+            togglePass.classList.toggle('ph-eye');
+            togglePass.classList.toggle('ph-eye-slash');
+        });
+    }
+    checkAuth();
+});
+
+function handleLogin() {
+    const email = document.getElementById('login-email').value;
+    const pass = document.getElementById('login-password').value;
+    const errorEl = document.getElementById('login-error-msg');
+
+    // Simple Admin Auth (In production, use Supabase Auth)
+    if (email === 'admin@farmmily.com' && pass === 'Admin#123') {
+        localStorage.setItem('adminLoggedIn', 'true');
+        showAdminContent();
+        showToast('Welcome back, Admin! 👋');
+    } else {
+        errorEl.style.display = 'block';
+        setTimeout(() => { errorEl.style.display = 'none'; }, 3000);
+    }
+}
+
+function handleLogout() {
+    localStorage.removeItem('adminLoggedIn');
+    location.reload();
+}
+
+function showAdminContent() {
+    document.getElementById('login-screen').style.display = 'none';
+    document.getElementById('sidebar').style.display = 'flex';
+    document.getElementById('main-wrapper').style.display = 'block';
+    document.body.classList.remove('show-login');
+    renderDashboard();
+    fetchDeliveryConfig();
+}
+
+function checkAuth() {
+    if (localStorage.getItem('adminLoggedIn') === 'true') {
+        showAdminContent();
+    }
+}
 
 // --- Navigation Logic ---
 function navigateTo(pageId) {
@@ -17,6 +69,7 @@ function navigateTo(pageId) {
     const titles = {
         'dashboard': 'Dashboard', 'all-products': 'All Products', 'add-product': 'Add Product',
         'categories': 'Categories', 'inventory': 'Inventory', 'all-orders': 'All Orders',
+        'delivery': 'Delivery & Logistics',
         'customers': 'Customers', 'reports': 'Reports', 'coupons': 'Coupons',
         'banners': 'Banners', 'reviews': 'Reviews', 'corporate': 'Corporate Orders 🏢', 'settings': 'Settings'
     };
@@ -31,6 +84,14 @@ function navigateTo(pageId) {
         }
     }
     if(window.innerWidth <= 1024) document.getElementById('sidebar').classList.remove('show');
+
+    // Page Specific Refresh
+    if (pageId === 'dashboard') renderDashboard();
+    if (pageId === 'all-products') renderProducts();
+    if (pageId === 'categories') renderCategories();
+    if (pageId === 'inventory') renderInventory();
+    if (pageId === 'all-orders') renderOrders();
+    if (pageId === 'delivery') renderDelivery();
 }
 
 document.querySelectorAll('[data-page]').forEach(el => {
@@ -139,6 +200,79 @@ function getUnitPrice(price, wt) {
     return { rate: Math.round(pVal), unit: (w.includes('l') || w.includes('ml')) ? 'L' : 'kg' };
 }
 
+async function fetchDeliveryConfig() {
+    try {
+        const { data } = await supabaseClient.from('store_settings').select('value').eq('key', 'delivery_config').maybeSingle();
+        if (data && data.value) {
+            const config = data.value;
+            const chargeInp = document.getElementById('del-charge-input');
+            const threshInp = document.getElementById('del-free-threshold');
+            if (chargeInp) chargeInp.value = config.charge || 50;
+            if (threshInp) threshInp.value = config.free_above || 999;
+        }
+    } catch (err) { console.error("Error fetching delivery config:", err); }
+}
+
+async function updateDeliveryConfig() {
+    const charge = parseInt(document.getElementById('del-charge-input').value) || 0;
+    const threshold = parseInt(document.getElementById('del-free-threshold').value) || 0;
+    
+    try {
+        const { error } = await supabaseClient.from('store_settings').upsert({
+            key: 'delivery_config',
+            value: { charge: charge, free_above: threshold },
+            updated_at: new Date().toISOString()
+        }, { onConflict: 'key' });
+        
+        if (error) throw error;
+        showToast("Delivery policy updated successfully ✅");
+        renderDelivery();
+    } catch (err) {
+        showToast("Error updating policy: " + err.message, 'error');
+    }
+}
+
+async function renderDelivery() {
+    const tbody = document.getElementById('delivery-history-tbody');
+    if (!tbody) return;
+    showLoading('delivery-history-tbody');
+    
+    await fetchDeliveryConfig();
+    
+    try {
+        const todayStr = new Date().toISOString().split('T')[0];
+        const { data: orders, error } = await supabaseClient
+            .from('orders')
+            .select('*, order_items(count)')
+            .eq('status', 'delivered')
+            .order('created_at', { ascending: false });
+            
+        if (error) throw error;
+        
+        const todayDelivered = (orders || []).filter(o => o.created_at.startsWith(todayStr)).length;
+        const countEl = document.getElementById('del-summary-count');
+        if (countEl) countEl.innerText = todayDelivered;
+
+        if (!orders || orders.length === 0) {
+            showEmpty('delivery-history-tbody', 'No delivery history found');
+        } else {
+            tbody.innerHTML = orders.map(o => `
+                <tr>
+                    <td><strong>#${o.order_number || o.id}</strong></td>
+                    <td>${o.customer_name || 'Guest'}</td>
+                    <td>${o.order_items?.[0]?.count || 0} items</td>
+                    <td><strong>₹${o.total}</strong></td>
+                    <td>${new Date(o.created_at).toLocaleDateString()}</td>
+                    <td><span class="status-badge status-delivered">Verified ✅</span></td>
+                </tr>
+            `).join('');
+        }
+    } catch (err) {
+        console.error(err);
+        showEmpty('delivery-history-tbody', 'Error loading history');
+    }
+}
+
 async function renderDashboard() {
     showLoading('dashboard-recent-orders');
     showLoading('dashboard-top-products');
@@ -162,9 +296,9 @@ async function renderDashboard() {
             return acc;
         }, {});
 
-        // Products
-        const { data: products, error: prodErr } = await supabaseClient.from('products').select('*');
-        if(prodErr) throw prodErr;
+        // Corporate Orders (to include in stats)
+        const { data: rawCorp, error: cErr } = await supabaseClient.from('corporate_orders').select('*');
+        if(cErr) throw cErr;
 
         // Stats Calc
         let todayOrders = 0;
@@ -197,6 +331,15 @@ async function renderDashboard() {
             if(status === 'packed') pipeline.packed++;
             if(status === 'shipped' || status === 'out-for-delivery') pipeline.shipped++;
         });
+
+        // Add Corporate Orders to stats
+        (rawCorp || []).forEach(c => {
+            const status = (c.status || '').toLowerCase();
+            const isToday = c.created_at && c.created_at.startsWith(todayStr);
+            if(isToday) todayOrders++;
+            if(status === 'new' || status === 'confirmed') pipeline.pending++;
+            if(status === 'fulfilled' && isToday) pipeline.deliveredToday++;
+        });
         
         const avgOrder = orders.length > 0 ? (totalRevForAvg / orders.length).toFixed(0) : 0;
 
@@ -217,6 +360,11 @@ async function renderDashboard() {
             statCardsPipe[3].innerText = pipeline.deliveredToday;
         }
 
+        const lowStockCount = products.filter(p => p.stock_count > 0 && p.stock_count < 20).length;
+        if(lowStockCount > 0) {
+            pushNotification(`${lowStockCount} items are running low on stock!`, 'warning');
+        }
+
         // Recent Orders Table
         if(orders.length === 0) showEmpty('dashboard-recent-orders');
         else {
@@ -231,7 +379,14 @@ async function renderDashboard() {
             `).join('');
         }
 
-        // Top Selling Products (dummy calc using stock)
+        // Top Selling Products (calculated from order_items)
+        const { data: topItems } = await supabaseClient.from('order_items').select('product_name, product_id, quantity');
+        const topCounts = (topItems || []).reduce((acc, item) => {
+            acc[item.product_name] = (acc[item.product_name] || 0) + (item.quantity || 1);
+            return acc;
+        }, {});
+        const sortedTop = Object.entries(topCounts).sort((a,b) => b[1] - a[1]).slice(0,4);
+        
         const fallbacks = [
             'https://images.unsplash.com/photo-1587049352846-4a222e784d38?auto=format&fit=crop&q=80&w=100', // Honey
             'https://images.unsplash.com/photo-1563805042-7684c019e1cb?auto=format&fit=crop&q=80&w=100', // Ghee
@@ -239,14 +394,15 @@ async function renderDashboard() {
             'https://images.unsplash.com/photo-1586201375761-83865001e31c?auto=format&fit=crop&q=80&w=100'  // Millets
         ];
         
-        document.getElementById('dashboard-top-products').innerHTML = products.slice(0,4).map((p, idx) => `
+        document.getElementById('dashboard-top-products').innerHTML = sortedTop.length > 0 ? sortedTop.map(([name, sales], idx) => `
             <tr>
                 <td style="display:flex;align-items:center;gap:10px">
-                    <img src="${p.image_url || fallbacks[idx % 4]}" class="product-img"> <span>${p.name}</span>
+                    <div style="width:30px;height:30px;background:#f3f4f6;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:var(--primary-dark)">${idx+1}</div>
+                    <span>${name}</span>
                 </td>
-                <td>${p.stock_count || 0} stock</td>
+                <td><span style="font-weight:700;color:var(--primary)">${sales}</span> sold</td>
             </tr>
-        `).join('');
+        `).join('') : '<tr><td colspan="2" style="text-align:center;color:#94a3b8;padding:10px">No sales yet</td></tr>';
 
         // Low stock (now including out of stock)
         const lowStock = products.filter(p => p.stock_count < 20).sort((a,b) => a.stock_count - b.stock_count);
@@ -387,12 +543,22 @@ async function renderReviews() {
 async function renderProducts() {
     showLoading('products-tbody');
     try {
-        const { data, error } = await supabaseClient.from('products').select(`*`);
-        if(error) throw error;
-        allProducts = data || [];
+        // 1. Fetch all products
+        const { data: products, error: prodError } = await supabaseClient.from('products').select('*');
+        if (prodError) throw prodError;
+
+        // 2. Do NOT filter products for Admin - they need to see everything to edit
+        allProducts = (products || []);
         
-        if(data.length === 0) showEmpty('products-tbody');
-        else buildProductsTable(data);
+        if (allProducts.length === 0) {
+            if (products.length > 0) {
+                document.getElementById('products-tbody').innerHTML = `<tr><td colspan="8" style="text-align:center;padding:40px;color:#64748b">All products have been ordered and are now hidden.</td></tr>`;
+            } else {
+                showEmpty('products-tbody');
+            }
+        } else {
+            buildProductsTable(allProducts);
+        }
     } catch(err) {
         showToast("Error loading products: " + (err.message || err), 'error');
         console.error(err);
@@ -1221,9 +1387,9 @@ async function viewOrder(id) {
                 itemsContainer.innerHTML = '<div style="padding:10px; color:#94a3b8; font-style:italic;">No items found for this order.</div>';
             } else {
                 itemsContainer.innerHTML = items.map(i => {
-                    // Logic to find image since it might not be in order_items
-                    let img = 'https://placehold.co/100?text=Farmmily';
-                    if (i.product_id) {
+                    // Use stored image if available, fallback to product search
+                    let img = i.product_image || 'https://placehold.co/100?text=Farmmily';
+                    if (!i.product_image && i.product_id) {
                         const lp = allProducts.find(x => x.id == i.product_id);
                         if (lp && lp.image_url) img = lp.image_url;
                     }
@@ -1962,3 +2128,138 @@ async function renderCODReport() {
         <tr><td>#${o.order_number || o.id}</td><td><span style="font-size:0.75rem;padding:3px 8px;border-radius:6px;background:#fef3c7;color:#92400e;font-weight:700;">${o.status.toUpperCase()}</span></td><td><strong>₹${o.total}</strong></td></tr>
     `).join('');
 }
+
+function setupRealtime() {
+    // Sync Products & Stock
+    supabaseClient.channel('public:products')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'products' }, (payload) => {
+            if(payload.eventType === 'UPDATE' && payload.new.stock_count <= 5) {
+                pushNotification(`Critical Low Stock: ${payload.new.name} (${payload.new.stock_count} left)`, 'error');
+            }
+            const pageEl = document.querySelector('.page.active');
+            if(!pageEl) return;
+            const page = pageEl.id;
+            if(page === 'page-all-products') renderProducts();
+            if(page === 'page-inventory') renderInventory();
+            if(page === 'page-dashboard') renderDashboard();
+        }).subscribe();
+
+    // Sync Orders
+    supabaseClient.channel('public:orders')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, (payload) => {
+            if(payload.eventType === 'INSERT') {
+                pushNotification(`New Order #${payload.new.order_number || payload.new.id.toString().substring(0,8)} received!`, 'success');
+            }
+            const pageEl = document.querySelector('.page.active');
+            if(!pageEl) return;
+            const page = pageEl.id;
+            if(page === 'page-all-orders') renderOrders();
+            if(page === 'page-dashboard') renderDashboard();
+        }).subscribe();
+
+    // Sync Corporate Orders
+    supabaseClient.channel('public:corporate_orders')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'corporate_orders' }, payload => {
+            if(payload.eventType === 'INSERT') {
+                pushNotification(`New Corporate Enquiry: ${payload.new.company_name}`, 'warning');
+                showToast('New Corporate Enquiry Received! 🏢', 'warning');
+                const badge = document.getElementById('corp-badge');
+                if(badge) badge.style.display = 'inline-block';
+            }
+            const pageEl = document.querySelector('.page.active');
+            if(!pageEl) return;
+            const page = pageEl.id;
+            if(page === 'page-corporate') renderCorpOrders();
+            if(page === 'page-dashboard') renderDashboard();
+        }).subscribe();
+    // Sync Settings
+    supabaseClient.channel('public:store_settings')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'store_settings' }, () => {
+            const pageEl = document.querySelector('.page.active');
+            if(pageEl && pageEl.id === 'page-delivery') renderDelivery();
+        }).subscribe();
+}
+
+// --- Notification Logic ---
+function pushNotification(msg, type = 'info') {
+    // Avoid duplicate rapid-fire notifications
+    const last = notifications[0];
+    if(last && last.msg === msg && (Date.now() - last.time < 5000)) return;
+
+    notifications.unshift({ msg, type, time: Date.now(), read: false });
+    if(notifications.length > 20) notifications.pop();
+    updateNotifUI();
+}
+
+function updateNotifUI() {
+    const dot = document.getElementById('notif-dot');
+    const list = document.getElementById('notif-list');
+    if(!dot || !list) return;
+
+    const unread = notifications.filter(n => !n.read).length;
+    dot.style.display = unread > 0 ? 'block' : 'none';
+
+    if(notifications.length === 0) {
+        list.innerHTML = '<div style="padding:20px; text-align:center; color:#94a3b8; font-size:0.85rem;">No new alerts</div>';
+        return;
+    }
+
+    list.innerHTML = notifications.map(n => `
+        <div style="padding:12px 15px; border-bottom:1px solid #f1f5f9; display:flex; gap:10px; align-items:flex-start; ${n.read ? 'opacity:0.7' : 'background:#f8fafc'}">
+            <div style="width:8px; height:8px; border-radius:50%; background:${getNotifColor(n.type)}; margin-top:5px; flex-shrink:0;"></div>
+            <div>
+                <div style="font-size:0.8rem; color:var(--text-main); font-weight:${n.read ? '500' : '700'}; line-height:1.4;">${n.msg}</div>
+                <div style="font-size:0.65rem; color:#94a3b8; margin-top:4px;">${formatNotifTime(n.time)}</div>
+            </div>
+        </div>
+    `).join('');
+}
+
+function getNotifColor(type) {
+    if(type === 'success') return '#22c55e';
+    if(type === 'error') return '#ef4444';
+    if(type === 'warning') return '#f59e0b';
+    return '#3b82f6';
+}
+
+function formatNotifTime(time) {
+    const diff = Math.floor((Date.now() - time) / 1000);
+    if(diff < 60) return 'Just now';
+    if(diff < 3600) return `${Math.floor(diff/60)}m ago`;
+    return new Date(time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+function toggleNotifications(e) {
+    e.stopPropagation();
+    const dropdown = document.getElementById('notif-dropdown');
+    if(!dropdown) return;
+    
+    const isShowing = dropdown.style.display === 'block';
+    dropdown.style.display = isShowing ? 'none' : 'block';
+    
+    if(!isShowing) {
+        notifications.forEach(n => n.read = true);
+        updateNotifUI();
+        
+        // Close on click outside
+        const closer = () => {
+            dropdown.style.display = 'none';
+            window.removeEventListener('click', closer);
+        };
+        setTimeout(() => window.addEventListener('click', closer), 10);
+    }
+}
+
+function clearNotifications(e) {
+    e.stopPropagation();
+    notifications = [];
+    updateNotifUI();
+    const dropdown = document.getElementById('notif-dropdown');
+    if(dropdown) dropdown.style.display = 'none';
+}
+
+// Start Setup
+checkAuth(); 
+setupRealtime();
+loadCategoryOptions(); 
+
