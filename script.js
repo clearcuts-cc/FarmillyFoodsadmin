@@ -35,6 +35,10 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
         console.log('✅ bootAdmin: Supabase ready! adminLoggedIn:', localStorage.getItem('adminLoggedIn'));
+        
+        // Handle routing based on URL
+        handleRouting();
+
         // Supabase is ready — if logged in, load dashboard
         if (localStorage.getItem('adminLoggedIn') === 'true') {
             showAdminContent();
@@ -43,12 +47,20 @@ document.addEventListener('DOMContentLoaded', () => {
     bootAdmin();
 });
 
+
 function showAdminContent() {
     console.log('🏠 showAdminContent called, supabaseClient:', supabaseClient ? 'ready' : 'NULL');
-    document.getElementById('login-screen').style.display = 'none';
-    document.getElementById('sidebar').style.display = 'flex';
-    document.getElementById('main-wrapper').style.display = 'flex';
+    
+    const loginScreen = document.getElementById('login-screen');
+    const sidebar = document.getElementById('sidebar');
+    const mainWrapper = document.getElementById('main-wrapper');
+
+    if (loginScreen) loginScreen.style.display = 'none';
+    if (sidebar) sidebar.style.display = 'flex';
+    if (mainWrapper) mainWrapper.style.display = 'flex';
+    
     document.body.classList.remove('show-login');
+    
     if (supabaseClient) {
         console.log('📊 Calling renderDashboard, fetchDeliveryConfig, loadCategoryOptions...');
         renderDashboard();
@@ -59,30 +71,97 @@ function showAdminContent() {
     }
 }
 
+function handleLogin() {
+    const emailInput = document.getElementById('login-email');
+    const passInput = document.getElementById('login-password');
+    const errorEl = document.getElementById('login-error-msg');
+
+    const email = emailInput ? emailInput.value.trim() : '';
+    const pass = passInput ? passInput.value : '';
+
+    if (email === 'admin@farmmily.com' && pass === 'Admin#123') {
+        localStorage.setItem('adminLoggedIn', 'true');
+        showAdminContent();
+        
+        const next = sessionStorage.getItem('redirectAfterLogin');
+        if (next) {
+            sessionStorage.removeItem('redirectAfterLogin');
+            navigateTo(next);
+        } else {
+            navigateTo('dashboard');
+        }
+        
+        if (typeof showToast === 'function') showToast('Welcome back, Admin!');
+    } else {
+        if (errorEl) {
+            errorEl.style.display = 'block';
+            setTimeout(() => { errorEl.style.display = 'none'; }, 3000);
+        }
+    }
+}
+
+function handleLogout() {
+    localStorage.removeItem('adminLoggedIn');
+    location.reload();
+}
+
+
 
 // --- Navigation Logic ---
-function navigateTo(pageId) {
+function navigateTo(pageId, push = true) {
+    console.log(`🚀 Navigating to: ${pageId} (push: ${push})`);
+    
+    const pageEl = document.getElementById(`page-${pageId}`);
+    if (!pageEl) {
+        console.warn(`⚠️ Page not found: ${pageId}`);
+        return;
+    }
+
     document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-    document.getElementById(`page-${pageId}`).classList.add('active');
+    pageEl.classList.add('active');
     
     const titles = {
-        'dashboard': 'Dashboard', 'all-products': 'All Products', 'add-product': 'Add Product',
-        'categories': 'Categories', 'inventory': 'Inventory', 'all-orders': 'All Orders',
-        'delivery': 'Delivery & Logistics',
-        'customers': 'Customers', 'reports': 'Reports', 'coupons': 'Coupons',
-        'banners': 'Banners', 'reviews': 'Reviews', 'corporate': 'Corporate Orders 🏢', 'settings': 'Settings'
+        'dashboard': 'Dashboard | Farmmily Admin', 
+        'all-products': 'All Products | Farmmily Admin', 
+        'add-product': 'Add Product | Farmmily Admin',
+        'categories': 'Categories | Farmmily Admin', 
+        'inventory': 'Inventory | Farmmily Admin', 
+        'all-orders': 'All Orders | Farmmily Admin',
+        'delivery': 'Delivery & Logistics | Farmmily Admin',
+        'customers': 'Customers | Farmmily Admin', 
+        'reports': 'Reports | Farmmily Admin', 
+        'coupons': 'Coupons | Farmmily Admin',
+        'banners': 'Banners | Farmmily Admin', 
+        'reviews': 'Reviews | Farmmily Admin', 
+        'corporate': 'Corporate Orders | Farmmily Admin', 
+        'settings': 'Settings | Farmmily Admin'
     };
-    document.getElementById('page-title').innerText = titles[pageId] || 'Admin';
+    
+    document.title = titles[pageId] || 'Farmmily Admin';
+    const titleEl = document.getElementById('page-title');
+    if (titleEl) titleEl.innerText = titles[pageId]?.split('|')[0].trim() || 'Admin';
 
+
+    // Sidebar active state
     document.querySelectorAll('.nav-item, .sub-nav-item').forEach(el => el.classList.remove('active'));
     let targetEl = document.querySelector(`[data-page="${pageId}"]`);
     if(targetEl) {
         targetEl.classList.add('active');
         if(targetEl.classList.contains('sub-nav-item')) {
-            targetEl.parentElement.previousElementSibling.classList.add('active');
+            const parentNav = targetEl.closest('.sub-nav').previousElementSibling;
+            if (parentNav) parentNav.classList.add('active');
         }
     }
-    if(window.innerWidth <= 1024) document.getElementById('sidebar').classList.remove('show');
+    
+    if(window.innerWidth <= 1024) {
+        const sidebar = document.getElementById('sidebar');
+        if (sidebar) sidebar.classList.remove('show');
+    }
+
+    // URL Synchronization
+    if (push) {
+        syncUrl(pageId);
+    }
 
     // Page Specific Refresh
     if (pageId === 'dashboard') renderDashboard();
@@ -92,6 +171,62 @@ function navigateTo(pageId) {
     if (pageId === 'all-orders') renderOrders();
     if (pageId === 'delivery') renderDelivery();
 }
+
+function syncUrl(pageId) {
+    const currentPath = window.location.pathname;
+    let targetPath = pageId === 'dashboard' ? '/' : '/' + pageId;
+    let newUrl = targetPath;
+    
+    // Support index.html and file protocols
+    if (currentPath.includes('index.html')) {
+        const base = currentPath.substring(0, currentPath.lastIndexOf('/') + 1);
+        newUrl = base + (pageId === 'dashboard' ? 'index.html' : 'index.html?page=' + pageId);
+    } else if (window.location.protocol === 'file:') {
+        newUrl = currentPath + (pageId === 'dashboard' ? '' : '?page=' + pageId);
+    }
+    
+    if (window.location.pathname + window.location.search !== newUrl) {
+        try {
+            window.history.pushState({ pageId: pageId }, '', newUrl);
+        } catch(e) { console.error('Router failed:', e); }
+    }
+}
+
+function handleRouting() {
+    console.log('🔗 handleRouting triggered');
+    const urlParams = new URLSearchParams(window.location.search);
+    const pageParam = urlParams.get('page');
+    const path = window.location.pathname;
+
+    let targetPage = 'dashboard';
+
+    if (pageParam) {
+        targetPage = pageParam;
+    } else {
+        // Try to infer from path if using clean URLs
+        const lastPart = path.split('/').pop();
+        if (lastPart && lastPart !== 'index.html' && lastPart !== '') {
+            targetPage = lastPart;
+        }
+    }
+
+    if (localStorage.getItem('adminLoggedIn') === 'true') {
+        navigateTo(targetPage, false);
+    } else {
+        // If not logged in, keep login screen but maybe track where they wanted to go
+        if (targetPage !== 'dashboard') {
+            sessionStorage.setItem('redirectAfterLogin', targetPage);
+        }
+    }
+}
+
+window.onpopstate = function(event) {
+    if (event.state && event.state.pageId) {
+        navigateTo(event.state.pageId, false);
+    } else {
+        handleRouting();
+    }
+};
 
 document.querySelectorAll('[data-page]').forEach(el => {
     el.addEventListener('click', (e) => {
@@ -737,11 +872,13 @@ async function renderCategories() {
                 else if (lowName.includes('oil')) iconHtml = '🧴';
                 else if (lowName.includes('beverage')) iconHtml = '🥤';
 
+                const catImg = c.image_url || '';
+
                 return `
                 <tr>
                     <td>
-                        <div style="display:flex; align-items:center; gap:10px;">
-                            <span style="font-size:1.5rem">${iconHtml}</span>
+                        <div style="display:flex; align-items:center; gap:12px;">
+                            ${catImg ? `<img src="${catImg}" class="product-img" style="width:40px; height:40px;">` : `<span style="font-size:1.5rem; width:40px; height:40px; display:flex; align-items:center; justify-content:center; background:#f1f5f9; border-radius:8px;">${iconHtml || '📁'}</span>`}
                             <strong>${c.name}</strong>
                         </div>
                     </td>
@@ -858,7 +995,7 @@ async function renderInventory() {
                 <tr>
                     <td>
                         <div style="display:flex; align-items:center; gap:12px;">
-                            <img src="${img}" style="width:40px; height:40px; border-radius:8px; object-fit:cover; border:1px solid var(--border-color);">
+                            <img src="${img}" class="product-img" style="width:48px; height:48px;">
                             <div style="display:flex; flex-direction:column;">
                                 <strong style="color:var(--text-main)">${p.name}</strong>
                                 <span style="font-size:0.75rem; color:var(--text-muted)">SKU: ${p.sku || 'N/A'}</span>
@@ -1168,7 +1305,7 @@ async function renderBanners() {
         else {
             el.innerHTML = data.map(b => `
                 <tr>
-                    <td><img src="${b.image_url}" height="50"></td>
+                    <td><img src="${b.image_url}" class="product-img" style="width:120px; height:60px; object-fit:cover;"></td>
                     <td><strong>${b.title}</strong></td>
                     <td>${b.sort_order}</td>
                     <td><label class="switch"><input type="checkbox" ${b.active ? 'checked' : ''} onchange="toggleBanner('${b.id}', this.checked)"><span class="slider"></span></label></td>
@@ -1438,7 +1575,7 @@ async function viewOrder(id) {
 
                     return `
                         <div style="display:flex; align-items:center; gap:12px; padding:12px; background:white; border-radius:12px; border:1px solid var(--border-color); box-shadow: 0 2px 4px rgba(0,0,0,0.02)">
-                            <img src="${img}" style="width:50px; height:50px; border-radius:10px; object-fit:cover; border: 1px solid #eee;">
+                            <img src="${img}" class="product-img" style="width:50px; height:50px;">
                             <div style="flex:1">
                                 <div style="font-weight:700; color:var(--text-main); font-size:0.95rem">${i.product_name}</div>
                                 <div style="font-size:0.8rem; color:#6b7280; font-weight:500; margin-top:2px;">
