@@ -334,22 +334,282 @@ function getUnitPrice(price, wt) {
     return { rate: Math.round(pVal), unit: (w.includes('l') || w.includes('ml')) ? 'L' : 'kg' };
 }
 
+function parseVariantQuantities(rawValue) {
+    const values = String(rawValue || '')
+        .split(',')
+        .map(v => parseFloat(v.trim()))
+        .filter(v => Number.isFinite(v) && v > 0);
+    return [...new Set(values)].sort((a, b) => a - b);
+}
+
+function getBasePricePerKg(product) {
+    if (product && product.base_price_per_kg != null && product.base_price_per_kg !== '') {
+        return parseFloat(product.base_price_per_kg) || 0;
+    }
+
+    const legacy = getUnitPrice(product?.price || 0, product?.weight || '1kg');
+    return parseFloat(legacy.rate || 0);
+}
+
+function calculateVariantPrice(basePricePerKg, quantityKg) {
+    return Math.round((parseFloat(basePricePerKg || 0) * parseFloat(quantityKg || 0)) * 100) / 100;
+}
+
+function getProductRateByKeyword(keyword) {
+    const needle = String(keyword || '').toLowerCase();
+    const product = (allProducts || []).find(item => {
+        const haystack = `${item?.name || ''} ${item?.rawName || ''}`.toLowerCase();
+        return haystack.includes(needle);
+    });
+    return product ? getBasePricePerKg(product) : 0;
+}
+
+function calculateCorporateOrderAmount(order = {}) {
+    const rates = {
+        imam: getProductRateByKeyword('imam'),
+        alph: getProductRateByKeyword('alph'),
+        bang: getProductRateByKeyword('bang'),
+        sent: getProductRateByKeyword('sent')
+    };
+
+    const mix = {
+        imam: parseInt(order.imam_qty, 10) || 0,
+        alph: parseInt(order.alph_qty, 10) || 0,
+        bang: parseInt(order.bang_qty, 10) || 0,
+        sent: parseInt(order.sent_qty, 10) || 0
+    };
+
+    const pricePerCrate = Object.entries(mix).reduce((total, [key, qty]) => total + (qty * (rates[key] || 0)), 0);
+    const totalKg = Object.values(mix).reduce((total, qty) => total + qty, 0);
+    const totalUnits = parseInt(order.total_units, 10) || 15;
+
+    return {
+        rates,
+        totalKg,
+        totalUnits,
+        pricePerCrate,
+        totalAmount: pricePerCrate * totalUnits
+    };
+}
+
+function formatCurrency(value) {
+    return `₹${(parseFloat(value || 0)).toFixed(2).replace(/\.00$/, '')}`;
+}
+
+function getProductVariantQuantities(product) {
+    if (Array.isArray(product?.variants) && product.variants.length > 0) {
+        return product.variants
+            .map(v => parseFloat(v.quantity_kg))
+            .filter(v => Number.isFinite(v) && v > 0)
+            .sort((a, b) => a - b);
+    }
+
+    if (product?.variant_quantities) {
+        if (Array.isArray(product.variant_quantities)) return parseVariantQuantities(product.variant_quantities.join(','));
+        return parseVariantQuantities(product.variant_quantities);
+    }
+
+    return [];
+}
+
+function buildVariantPreviewHtml(basePricePerKg, quantities) {
+    if (!quantities.length) {
+        return `<span style="font-size:0.8rem; color:var(--text-muted);">Add quantities like 3,5,7,10,15</span>`;
+    }
+
+    return quantities.map(qty => `
+        <span class="variant-pill">${qty}kg <span>${formatCurrency(calculateVariantPrice(basePricePerKg, qty))}</span></span>
+    `).join('');
+}
+
+function refreshVariantPreview() {
+    const preview = document.getElementById('variant-preview');
+    const basePriceInput = document.querySelector('#product-form input[name="base_price_per_kg"]');
+    const variantInput = document.querySelector('#product-form input[name="variant_quantities"]');
+    if (!preview || !basePriceInput || !variantInput) return;
+
+    preview.innerHTML = buildVariantPreviewHtml(
+        parseFloat(basePriceInput.value || 0),
+        parseVariantQuantities(variantInput.value)
+    );
+}
+
+function getMissingColumnName(error) {
+    const message = String(error?.message || error?.details || '');
+    const match = message.match(/column\s+["']?([a-zA-Z0-9_]+)["']?/i);
+    return match ? match[1] : null;
+}
+
+async function upsertVariantsWithFallback(payload) {
+    let sanitizedPayload = payload.map(row => ({ ...row }));
+
+    while (sanitizedPayload.length > 0 && Object.keys(sanitizedPayload[0]).length > 0) {
+        const { error } = await supabaseClient
+            .from('product_variants')
+            .upsert(sanitizedPayload, { onConflict: 'product_id,label' });
+
+        if (!error) return;
+
+        const missingColumn = getMissingColumnName(error);
+        if (!missingColumn || !(missingColumn in sanitizedPayload[0])) {
+            throw error;
+        }
+
+        sanitizedPayload = sanitizedPayload.map(row => {
+            const nextRow = { ...row };
+            delete nextRow[missingColumn];
+            return nextRow;
+        });
+    }
+
+    throw new Error('Unable to save product variants because no supported columns were found.');
+}
+
+async function saveProductVariants(productId, rawQuantities, pricing = {}) {
+    const quantities = parseVariantQuantities(rawQuantities);
+    const labels = quantities.map(qty => `${qty}kg`);
+    const basePricePerKg = parseFloat(pricing.basePricePerKg || 0);
+    const compareAtPerKg = parseFloat(pricing.compareAtPerKg || 0);
+    const payload = quantities.map((qty, index) => ({
+        product_id: productId,
+        label: `${qty}kg`,
+        quantity_kg: qty,
+        is_default: index === 0,
+        price: calculateVariantPrice(basePricePerKg, qty),
+        original_price: compareAtPerKg > 0 ? calculateVariantPrice(compareAtPerKg, qty) : null,
+        base_price: basePricePerKg,
+        base_price_per_kg: basePricePerKg,
+        compare_at_price_per_kg: compareAtPerKg > 0 ? compareAtPerKg : null,
+        updated_at: new Date().toISOString()
+    }));
+
+    if (payload.length > 0) {
+        await upsertVariantsWithFallback(payload);
+    }
+
+    const { data: existingVariants, error: fetchError } = await supabaseClient
+        .from('product_variants')
+        .select('id, label')
+        .eq('product_id', productId);
+    if (fetchError) throw fetchError;
+
+    const staleIds = (existingVariants || [])
+        .filter(variant => !labels.includes(variant.label))
+        .map(variant => variant.id);
+
+    if (staleIds.length > 0) {
+        const { error: deleteError } = await supabaseClient
+            .from('product_variants')
+            .delete()
+            .in('id', staleIds);
+        if (deleteError) throw deleteError;
+    }
+}
+
+async function touchProductCatalogSync(productId = null) {
+    const timestamp = new Date().toISOString();
+
+    const updates = [
+        () => supabaseClient
+            .from('store_settings')
+            .upsert({
+                key: 'product_catalog_sync',
+                value: {
+                    product_id: productId,
+                    synced_at: timestamp
+                },
+                updated_at: timestamp
+            }, { onConflict: 'key' })
+    ];
+
+    if (productId) {
+        updates.push(
+            () => supabaseClient
+                .from('products')
+                .update({ updated_at: timestamp })
+                .eq('id', productId)
+        );
+    }
+
+    for (const runUpdate of updates) {
+        try {
+            const { error } = await runUpdate();
+            if (error) {
+                const missingColumn = getMissingColumnName(error);
+                if (missingColumn === 'updated_at') continue;
+                throw error;
+            }
+        } catch (error) {
+            const missingColumn = getMissingColumnName(error);
+            if (missingColumn === 'updated_at') continue;
+            throw error;
+        }
+    }
+}
+
+async function saveProductRecordWithFallback(productPayload, productId = null) {
+    let sanitizedPayload = { ...productPayload };
+
+    while (Object.keys(sanitizedPayload).length > 0) {
+        const query = productId
+            ? supabaseClient.from('products').update(sanitizedPayload).eq('id', productId).select()
+            : supabaseClient.from('products').insert([sanitizedPayload]).select();
+
+        const result = await query;
+        if (!result.error) return result;
+
+        const missingColumn = getMissingColumnName(result.error);
+        if (!missingColumn || !(missingColumn in sanitizedPayload)) {
+            return result;
+        }
+
+        delete sanitizedPayload[missingColumn];
+    }
+
+    return {
+        data: null,
+        error: new Error('Could not save product because none of the submitted columns were accepted by the database.')
+    };
+}
+
 async function fetchDeliveryConfig() {
     try {
         const { data } = await supabaseClient.from('store_settings').select('value').eq('key', 'delivery_config').maybeSingle();
         if (data && data.value) {
             const config = data.value;
-            const chargeInp = document.getElementById('del-charge-input');
-            const threshInp = document.getElementById('del-free-threshold');
-            if (chargeInp) chargeInp.value = config.charge || 50;
-            if (threshInp) threshInp.value = config.free_above || 999;
+            
+            // Sync all delivery input fields across the app
+            const chargeInputs = ['del-charge-input', 'settings-del-charge-input'];
+            const thresholdInputs = ['del-free-threshold', 'settings-del-free-threshold'];
+
+            chargeInputs.forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.value = (config.charge !== undefined && config.charge !== null) ? config.charge : 50;
+            });
+
+            thresholdInputs.forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.value = (config.free_above !== undefined && config.free_above !== null) ? config.free_above : 999;
+            });
         }
     } catch (err) { console.error("Error fetching delivery config:", err); }
 }
 
-async function updateDeliveryConfig() {
-    const charge = parseInt(document.getElementById('del-charge-input').value) || 0;
-    const threshold = parseInt(document.getElementById('del-free-threshold').value) || 0;
+async function updateDeliveryConfig(source = 'delivery') {
+    let chargeInp, thresholdInp;
+    
+    if (source === 'settings') {
+        chargeInp = document.getElementById('settings-del-charge-input');
+        thresholdInp = document.getElementById('settings-del-free-threshold');
+    } else {
+        chargeInp = document.getElementById('del-charge-input');
+        thresholdInp = document.getElementById('del-free-threshold');
+    }
+
+    if (!chargeInp || !thresholdInp) return;
+
+    const charge = parseInt(chargeInp.value) || 0;
+    const threshold = parseInt(thresholdInp.value) || 0;
     
     try {
         const { error } = await supabaseClient.from('store_settings').upsert({
@@ -360,7 +620,10 @@ async function updateDeliveryConfig() {
         
         if (error) throw error;
         showToast("Delivery policy updated successfully ✅");
-        renderDelivery();
+        
+        // Update the other inputs and UI
+        await fetchDeliveryConfig();
+        if (typeof renderDelivery === 'function') renderDelivery();
     } catch (err) {
         showToast("Error updating policy: " + err.message, 'error');
     }
@@ -694,16 +957,34 @@ async function renderReviews() {
 async function renderProducts() {
     showLoading('products-tbody');
     try {
-        // 1. Fetch all products
-        const { data: products, error: prodError } = await supabaseClient.from('products').select('*');
+        const { data: products, error: prodError } = await supabaseClient
+            .from('products')
+            .select('*')
+            .order('priority', { ascending: true })
+            .order('name', { ascending: true });
         if (prodError) throw prodError;
 
-        // 2. Do NOT filter products for Admin - they need to see everything to edit
-        allProducts = (products || []);
+        const { data: variants, error: variantsError } = await supabaseClient
+            .from('product_variants')
+            .select('*')
+            .order('quantity_kg', { ascending: true });
+        if (variantsError) throw variantsError;
+
+        const variantMap = (variants || []).reduce((acc, variant) => {
+            const key = String(variant.product_id);
+            if (!acc[key]) acc[key] = [];
+            acc[key].push(variant);
+            return acc;
+        }, {});
+
+        allProducts = (products || []).map(product => ({
+            ...product,
+            variants: variantMap[String(product.id)] || []
+        }));
         
         if (allProducts.length === 0) {
             if (products.length > 0) {
-                document.getElementById('products-tbody').innerHTML = `<tr><td colspan="8" style="text-align:center;padding:40px;color:#64748b">All products have been ordered and are now hidden.</td></tr>`;
+                document.getElementById('products-tbody').innerHTML = `<tr><td colspan="10" style="text-align:center;padding:40px;color:#64748b">All products have been ordered and are now hidden.</td></tr>`;
             } else {
                 showEmpty('products-tbody');
             }
@@ -716,29 +997,39 @@ async function renderProducts() {
     }
 }
 
+
 function buildProductsTable(products) {
     document.getElementById('products-tbody').innerHTML = products.map(p => {
         const cat = allCategories.find(c => c.id === p.category_id);
         const isOutOfStock = p.in_stock === false;
-        const isHidden = p.is_active === false;
-        
+        const basePrice = getBasePricePerKg(p);
+        const variantQuantities = getProductVariantQuantities(p);
+        const variantSummary = variantQuantities.length
+            ? variantQuantities.map(qty => `${qty}kg ${formatCurrency(calculateVariantPrice(basePrice, qty))}`).join('<br>')
+            : '<span style="font-size:0.75rem; color:#94a3b8;">No variants</span>';
+        const reviewCount = p.review_count ?? p.rating_count ?? 0;
+        const averageRating = Number(p.avg_rating ?? p.rating ?? 0);
+        const ratingLabel = reviewCount > 0 ? `${averageRating.toFixed(1)} (${reviewCount})` : 'No ratings';
+
         return `
         <tr>
             <td><img src="${p.image_url || 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=100'}" class="product-img"></td>
-            <td><strong>${p.name}</strong></td>
-            <td>${cat?.name || '-'}</td>
             <td>
-                <div style="font-weight:700; color:var(--text-main)">
-                    Rate: ₹${(() => {
-                        const info = getUnitPrice(p.price, p.weight);
-                        return info.rate + '/' + info.unit;
-                    })()}
-                </div>
-                <div style="font-size:0.75rem; color:#64748b; font-weight:600">
-                    Total Item Price: ₹${p.price}
+                <strong>${p.name}</strong>
+                <div style="font-size:0.75rem; color:#64748b; margin-top:4px;">
+                    <span style="color:#f59e0b;">★</span> ${ratingLabel}
                 </div>
             </td>
+            <td>${cat?.name || '-'}</td>
+            <td>
+                <div style="font-weight:700; color:var(--text-main)">Base: ${formatCurrency(basePrice)}/kg</div>
+                <div style="font-size:0.75rem; color:#64748b; font-weight:600">${(p.product_type || 'standard').replace(/_/g, ' ')}</div>
+            </td>
+            <td style="font-size:0.78rem; line-height:1.5">${variantSummary}</td>
             <td>${p.stock_count}</td>
+            <td>
+                <input type="number" class="form-control" value="${p.priority ?? 100}" min="1" style="width:90px;" onchange="updateProductPriority('${p.id}', this.value)">
+            </td>
             <td>
                 <div style="display:flex; align-items:center; gap:8px;">
                     <label class="switch">
@@ -751,7 +1042,7 @@ function buildProductsTable(products) {
                 </div>
             </td>
             <td>
-                <div style="display:flex; align-items:center; gap:8px;">
+                <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
                     <label class="switch">
                         <input type="checkbox" ${p.is_active ? 'checked' : ''} onchange="toggleProductVisibility('${p.id}', this.checked)">
                         <span class="slider"></span>
@@ -759,6 +1050,20 @@ function buildProductsTable(products) {
                     <span style="font-size: 0.75rem; color: ${p.is_active ? '#3b82f6' : '#94a3b8'}; font-weight: 600;">
                         ${p.is_active ? 'Visible' : 'Hidden'}
                     </span>
+                </div>
+                <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:8px;">
+                    <span style="font-size:0.75rem; color:var(--text-main); font-weight:700;">Home</span>
+                    <label class="switch">
+                        <input type="checkbox" ${p.show_on_home ? 'checked' : ''} onchange="toggleProductPlacement('${p.id}', 'show_on_home', this.checked)">
+                        <span class="slider"></span>
+                    </label>
+                </div>
+                <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
+                    <span style="font-size:0.75rem; color:#64748b; font-weight:700;">Shop</span>
+                    <label class="switch">
+                        <input type="checkbox" ${p.show_on_shop !== false ? 'checked' : ''} onchange="toggleProductPlacement('${p.id}', 'show_on_shop', this.checked)">
+                        <span class="slider"></span>
+                    </label>
                 </div>
             </td>
             <td>
@@ -787,6 +1092,68 @@ async function toggleProductVisibility(id, isActive) {
         showToast("Product visibility updated ✅");
         renderProducts();
     }
+}
+
+async function updateProductPriority(id, value) {
+    const priority = parseInt(value, 10);
+    if (!Number.isFinite(priority) || priority < 1) {
+        showToast("Priority must be 1 or more", 'warning');
+        renderProducts();
+        return;
+    }
+
+    const { error } = await supabaseClient.from('products').update({ priority }).eq('id', id);
+    if(error) {
+        showToast("Error updating product priority", 'error');
+        renderProducts();
+    } else {
+        showToast("Product priority updated ✅");
+        renderProducts();
+    }
+}
+
+async function toggleProductPlacement(id, field, value) {
+    if (!['show_on_home', 'show_on_shop'].includes(field)) {
+        showToast("Invalid placement field", 'error');
+        return;
+    }
+
+    const { error } = await supabaseClient.from('products').update({ [field]: value }).eq('id', id);
+    if(error) {
+        showToast("Error updating product placement", 'error');
+        renderProducts();
+    } else {
+        showToast(`${field === 'show_on_home' ? 'Home' : 'Shop'} visibility updated ✅`);
+        renderProducts();
+    }
+}
+
+async function syncProductRatingSummary(productId) {
+    if (!productId) return;
+
+    const { data: reviews, error: reviewsError } = await supabaseClient
+        .from('reviews')
+        .select('rating')
+        .eq('product_id', productId);
+
+    if (reviewsError) throw reviewsError;
+
+    const reviewCount = (reviews || []).length;
+    const averageRating = reviewCount
+        ? Number((reviews.reduce((sum, review) => sum + (Number(review.rating) || 0), 0) / reviewCount).toFixed(2))
+        : 0;
+
+    const { error: updateError } = await supabaseClient
+        .from('products')
+        .update({
+            rating: averageRating,
+            avg_rating: averageRating,
+            review_count: reviewCount,
+            rating_count: reviewCount
+        })
+        .eq('id', productId);
+
+    if (updateError) throw updateError;
 }
 
 async function deleteProduct(id) {
@@ -1683,25 +2050,28 @@ function setupChart() {
     }).join('');
 }
 
-// --- Add/Edit Product Logic ---
+// --- Add/Edit Product Logic (canonical versions below at line ~2000+) ---
 let editingProductId = null;
 
 function resetProductForm() {
     editingProductId = null;
     const form = document.getElementById('product-form');
-    if(form) form.reset();
-    const preview = document.getElementById('img-preview');
-    if(preview) preview.src = 'https://placehold.co/100';
-    const title = document.getElementById('pm-title');
-    if(title) title.innerText = 'Add New Product';
-    const btn = document.getElementById('save-product-btn');
-    if(btn) btn.innerText = 'Save Product';
+    if (form) form.reset();
 
-    // Reset weight defaults
-    const wv = document.getElementById('weight-value');
-    const wu = document.getElementById('weight-unit');
-    if(wv) wv.value = "1";
-    if(wu) wu.value = "kg";
+    const preview = document.getElementById('img-preview');
+    if (preview) preview.src = 'https://placehold.co/100';
+
+    const title = document.getElementById('pm-title');
+    if (title) title.innerText = 'Add New Product';
+
+    const btn = document.getElementById('save-product-btn');
+    if (btn) btn.innerText = 'Save Product';
+
+    if (form?.elements['product_type']) form.elements['product_type'].value = 'standard';
+    if (form?.elements['priority']) form.elements['priority'].value = '100';
+    if (form?.elements['variant_quantities']) form.elements['variant_quantities'].value = '3,5,7,10,15';
+    if (form?.elements['show_on_shop']) form.elements['show_on_shop'].checked = true;
+    refreshVariantPreview();
 }
 
 async function editProduct(id) {
@@ -1714,84 +2084,103 @@ async function editProduct(id) {
     const form = document.getElementById('product-form');
     if(!form) return;
 
-    // Ensure categories are loaded into the dropdown BEFORE setting value
     await loadCategoryOptions();
 
     form.elements['name'].value = p.name || '';
     form.elements['category_id'].value = p.category_id || '';
     form.elements['badge'].value = p.badge || '';
+    form.elements['product_type'].value = p.product_type || 'standard';
     form.elements['slug'].value = p.slug || '';
     form.elements['description'].value = p.description || '';
     form.elements['image_url'].value = p.image_url || '';
-    form.elements['price'].value = p.price || '';
-    form.elements['original_price'].value = p.original_price || '';
+    form.elements['base_price_per_kg'].value = getBasePricePerKg(p) || '';
+    form.elements['compare_at_price_per_kg'].value = p.compare_at_price_per_kg || p.original_price || '';
     form.elements['stock_count'].value = p.stock_count || 0;
-    
-    // Parse weight for edit
-    const wv = document.getElementById('weight-value');
-    const wu = document.getElementById('weight-unit');
-    if(wv && wu && p.weight) {
-        const wt = p.weight.toLowerCase();
-        const nm = wt.match(/[\d.]+/);
-        if(nm) wv.value = nm[0];
-        
-        if(wt.includes('ml')) wu.value = 'ml';
-        else if(wt.includes('litre') || wt.includes(' l') || wt.endsWith('l')) wu.value = 'L';
-        else if(wt.includes('kg')) wu.value = 'kg';
-        else if(wt.includes('g') && !wt.includes('kg')) wu.value = 'g';
-    }
-
+    form.elements['priority'].value = p.priority ?? 100;
+    form.elements['variant_quantities'].value = getProductVariantQuantities(p).join(',') || (typeof p.variant_quantities === 'string' ? p.variant_quantities : '3,5,7,10,15');
     form.elements['in_stock'].checked = !!p.in_stock;
     form.elements['is_active'].checked = p.is_active !== false;
     form.elements['is_featured'].checked = !!p.is_featured;
-    form.elements['rating'].value = p.rating || 5.0;
-    form.elements['review_count'].value = p.review_count || 10;
+    form.elements['show_on_home'].checked = !!p.show_on_home;
+    form.elements['show_on_shop'].checked = p.show_on_shop !== false;
 
     const preview = document.getElementById('img-preview');
     if(preview) preview.src = p.image_url || 'https://placehold.co/100';
 
     document.getElementById('pm-title').innerText = 'Edit Product: ' + p.name;
     document.getElementById('save-product-btn').innerText = 'Update Product';
+    refreshVariantPreview();
 }
 
 async function saveProduct(event) {
     event.preventDefault();
     const form = document.getElementById('product-form');
-    
+    const variantQuantities = parseVariantQuantities(form.elements['variant_quantities']?.value || '3,5,7,10,15');
+    const defaultVariantQty = variantQuantities[0] || 1;
+    const basePricePerKg = parseFloat(form.elements['base_price_per_kg']?.value || 0);
+    const compareAtPerKg = parseFloat(form.elements['compare_at_price_per_kg']?.value || 0);
+
+    if (!basePricePerKg || basePricePerKg <= 0) {
+        showToast('Please enter a valid Base Price Per Kg', 'warning');
+        return;
+    }
+
+    const defaultPrice    = calculateVariantPrice(basePricePerKg, defaultVariantQty);
+    const defaultOldPrice = compareAtPerKg > 0 ? calculateVariantPrice(compareAtPerKg, defaultVariantQty) : null;
+
     const obj = {
-        name: form.elements['name'].value,
-        category_id: form.elements['category_id'].value,
-        badge: form.elements['badge'].value,
-        slug: form.elements['slug'].value,
-        description: form.elements['description'].value,
-        image_url: form.elements['image_url'].value,
-        price: parseFloat(form.elements['price'].value),
-        original_price: parseFloat(form.elements['original_price'].value || 0),
-        stock_count: parseInt(form.elements['stock_count'].value),
-        weight: (document.getElementById('weight-value').value + document.getElementById('weight-unit').value).toLowerCase(),
-        in_stock: form.elements['in_stock'].checked,
-        is_active: form.elements['is_active'].checked,
-        is_featured: form.elements['is_featured'].checked,
-        rating: parseFloat(form.elements['rating'].value || 5.0),
-        review_count: parseInt(form.elements['review_count'].value || 10)
+        name:                    form.elements['name'].value.trim(),
+        category_id:             parseInt(form.elements['category_id'].value) || null,
+        badge:                   form.elements['badge']?.value || null,
+        product_type:            form.elements['product_type']?.value || 'standard',
+        slug:                    form.elements['slug'].value.trim(),
+        description:             form.elements['description']?.value || null,
+        image_url:               form.elements['image_url']?.value || null,
+        // Base price fields (canonical DB columns)
+        base_price:              basePricePerKg,          // DB column: base_price
+        base_price_per_kg:       basePricePerKg,          // extra column
+        compare_at_price_per_kg: compareAtPerKg || null,
+        available_weights:       variantQuantities,        // DB column: available_weights (numeric[])
+        variant_quantities:      variantQuantities.join(','),
+        // Legacy price / weight for backwards-compat display
+        price:                   defaultPrice,
+        original_price:          defaultOldPrice,
+        weight:                  `${defaultVariantQty}kg`,
+        // Admin controls
+        stock_count:   parseInt(form.elements['stock_count']?.value || 0),
+        priority:      parseInt(form.elements['priority']?.value || 100),
+        in_stock:      form.elements['in_stock']?.checked ?? true,
+        is_active:     form.elements['is_active']?.checked ?? true,
+        is_featured:   form.elements['is_featured']?.checked ?? false,
+        show_on_home:  form.elements['show_on_home']?.checked ?? false,
+        show_on_shop:  form.elements['show_on_shop']?.checked ?? true,
     };
 
-    let result;
-    if(editingProductId) {
-        result = await supabaseClient.from('products').update(obj).eq('id', editingProductId);
-    } else {
-        result = await supabaseClient.from('products').insert([obj]);
-    }
+    const result = await saveProductRecordWithFallback(obj, editingProductId);
 
     if(result.error) {
         showToast("Error saving product: " + result.error.message, 'error');
-    } else {
-        showToast("Product saved successfully ✅");
-        resetProductForm();
-        navigateTo('all-products');
-        renderProducts();
-        renderInventory();
+        return;
     }
+
+    const savedProductId = editingProductId || result.data?.[0]?.id;
+    try {
+        if (savedProductId) {
+            await saveProductVariants(savedProductId, form.elements['variant_quantities'].value, {
+                basePricePerKg,
+                compareAtPerKg
+            });
+            await touchProductCatalogSync(savedProductId);
+        }
+    } catch (variantError) {
+        showToast("Product saved, but instant sync failed: " + variantError.message, 'warning');
+    }
+
+    showToast("Product saved successfully ✅");
+    resetProductForm();
+    navigateTo('all-products');
+    renderProducts();
+    renderInventory();
 }
 
 // Init
@@ -1871,6 +2260,12 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    const basePriceInput = document.querySelector('#product-form input[name="base_price_per_kg"]');
+    const variantInput = document.querySelector('#product-form input[name="variant_quantities"]');
+    if (basePriceInput) basePriceInput.addEventListener('input', refreshVariantPreview);
+    if (variantInput) variantInput.addEventListener('input', refreshVariantPreview);
+    refreshVariantPreview();
+
     const catImgInput = document.getElementById('cat-image-url');
     const catImgPreview = document.getElementById('cat-img-preview');
     if(catImgInput && catImgPreview) {
@@ -1934,9 +2329,19 @@ async function editReview(id) {
 
 async function deleteReview(id) {
     if(!await showConfirm("Delete Review?", "Are you sure? This will remove the feedback from your site permanently.", "Delete", "#ef4444")) return;
+    const { data: existingReview } = await supabaseClient.from('reviews').select('product_id').eq('id', id).single();
     const { error } = await supabaseClient.from('reviews').delete().eq('id', id);
     if(error) showToast("Error deleting: " + error.message, 'error');
-    else { showToast("Review deleted successfully 🗑️"); renderReviews(); }
+    else {
+        try {
+            await syncProductRatingSummary(existingReview?.product_id);
+        } catch (syncError) {
+            console.warn('Rating sync failed after delete', syncError);
+        }
+        showToast("Review deleted successfully 🗑️");
+        renderReviews();
+        renderProducts();
+    }
 }
 
 const reviewForm = document.getElementById('review-form');
@@ -1944,6 +2349,12 @@ if(reviewForm) {
     reviewForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         const id = document.getElementById('edit-review-id').value;
+        let previousProductId = null;
+        if (id) {
+            const { data: existingReview } = await supabaseClient.from('reviews').select('product_id').eq('id', id).single();
+            previousProductId = existingReview?.product_id ?? null;
+        }
+
         const obj = {
             customer_name: reviewForm.elements['customer_name'].value,
             product_id: parseInt(reviewForm.elements['product_id'].value),
@@ -1957,9 +2368,18 @@ if(reviewForm) {
         
         if(res.error) showToast("Error saving review: " + res.error.message, 'error');
         else {
+            try {
+                await syncProductRatingSummary(obj.product_id);
+                if (previousProductId && previousProductId !== obj.product_id) {
+                    await syncProductRatingSummary(previousProductId);
+                }
+            } catch (syncError) {
+                console.warn('Rating sync failed after review save', syncError);
+            }
             showToast("Review saved successfully ✅");
             closeModal('reviewModal');
             renderReviews();
+            renderProducts();
         }
     });
 }
@@ -2265,6 +2685,19 @@ async function saveCorpOrder() {
         enquiry_ref: 'CE-' + Math.floor(1000000 + Math.random() * 9000000),
         status: 'new'
     };
+
+    const pricing = calculateCorporateOrderAmount(obj);
+    if (pricing.totalKg !== obj.crate_size) {
+        showToast(`The selected mango mix totals ${pricing.totalKg}kg. It must match the crate size of ${obj.crate_size}kg.`, 'warning');
+        return;
+    }
+
+    if (pricing.pricePerCrate <= 0) {
+        showToast('Unable to calculate crate pricing from current product prices. Please ensure mango products have a base price per kg.', 'warning');
+        return;
+    }
+
+    obj.total_amount = pricing.totalAmount;
 
     try {
         const { error } = await supabaseClient.from('corporate_orders').insert([obj]);
