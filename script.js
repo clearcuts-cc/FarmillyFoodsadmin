@@ -343,7 +343,14 @@ function parseVariantQuantities(rawValue) {
 }
 
 function getBasePricePerKg(product) {
-    if (product && product.base_price_per_kg != null && product.base_price_per_kg !== '') {
+    if (!product) return 0;
+    const lowerName = (product.name || '').toLowerCase();
+    if (lowerName.includes('custom heritage')) {
+        const keys = ['imam', 'alph', 'bang', 'sent'];
+        const rates = keys.map(k => getProductRateByKeyword(k)).filter(r => r > 0);
+        return rates.length ? Math.round(rates.reduce((s, r) => s + r, 0) / rates.length) : 0;
+    }
+    if (product.base_price_per_kg != null && product.base_price_per_kg !== '') {
         return parseFloat(product.base_price_per_kg) || 0;
     }
 
@@ -2171,6 +2178,12 @@ async function saveProduct(event) {
                 compareAtPerKg
             });
             await touchProductCatalogSync(savedProductId);
+
+            // CENTRALIZED PRICING SYNC FOR VARIETIES (e.g. Alphonso 3kg, 5kg, etc.)
+            if (obj.category_id === 10) { // 10 = Mangoes
+                const varietyName = obj.name.split('(')[0].trim();
+                await syncVarietyPrices(varietyName, basePricePerKg, compareAtPerKg);
+            }
         }
     } catch (variantError) {
         showToast("Product saved, but instant sync failed: " + variantError.message, 'warning');
@@ -2976,3 +2989,45 @@ checkAuth();
 setupRealtime();
 loadCategoryOptions(); 
 
+
+async function syncVarietyPrices(varietyName, basePrice, compareAt) {
+    console.log(`Syncing prices for variety: ${varietyName} -> ₹${basePrice}/kg`);
+    try {
+        const { data: cousins, error } = await supabaseClient
+            .from('products')
+            .select('id, name, available_weights')
+            .eq('category_id', 10);
+            
+        if (error) throw error;
+        
+        const matches = (cousins || []).filter(c => c.name.startsWith(varietyName));
+        
+        for (const p of matches) {
+            const weights = p.available_weights || [3,5,7,10,15];
+            const defaultWeight = weights[0] || 3;
+            
+            const newPrice = Math.round(basePrice * defaultWeight);
+            const newOldPrice = compareAt > 0 ? Math.round(compareAt * defaultWeight) : null;
+            
+            const updatePayload = {
+                base_price: basePrice,
+                base_price_per_kg: basePrice,
+                compare_at_price_per_kg: compareAt || null,
+                price: newPrice,
+                original_price: newOldPrice,
+                updated_at: new Date().toISOString()
+            };
+            
+            await supabaseClient.from('products').update(updatePayload).eq('id', p.id);
+            
+            if (typeof saveProductVariants === 'function') {
+                await saveProductVariants(p.id, weights.join(','), {
+                    basePricePerKg: basePrice,
+                    compareAtPerKg: compareAt
+                });
+            }
+        }
+    } catch (err) {
+        console.error(`Variety sync failed:`, err);
+    }
+}
