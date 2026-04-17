@@ -2746,25 +2746,77 @@ async function deleteCorpOrder(id) {
 }
 
 async function renderProductReport() {
-    const tbody = document.getElementById('product-report-tbody');
-    if(!tbody) return;
-    tbody.innerHTML = allProducts.slice(0, 5).map(p => {
-        const cat = allCategories.find(c => c.id === p.category_id);
-        return `<tr><td>${p.name}</td><td>${cat?.name || 'N/A'}</td><td>${p.stock_count}</td><td>₹${p.price}</td></tr>`;
-    }).join('');
+    const el = document.getElementById('product-report-tbody');
+    if(!el) return;
+    showLoading('product-report-tbody');
+    try {
+        const { data: items, error } = await supabaseClient.from('order_items').select('*');
+        if(error) throw error;
+        
+        const summary = (items || []).reduce((acc, item) => {
+            const name = item.product_name;
+            if(!acc[name]) acc[name] = { sales: 0, revenue: 0 };
+            acc[name].sales += (item.quantity || 0);
+            acc[name].revenue += (parseFloat(item.total_price) || 0);
+            return acc;
+        }, {});
+
+        const sorted = Object.entries(summary).sort((a,b) => b[1].revenue - a[1].revenue);
+        
+        if(sorted.length === 0) showEmpty('product-report-tbody');
+        else {
+            el.innerHTML = sorted.map(([name, vals]) => `
+                <tr>
+                    <td><strong>${name}</strong></td>
+                    <td>Organic</td>
+                    <td>${vals.sales} Units</td>
+                    <td>₹${vals.revenue.toLocaleString()}</td>
+                </tr>
+            `).join('');
+        }
+    } catch(err) { console.error(err); }
 }
 
 async function renderCODReport() {
-    const tbody = document.getElementById('cod-report-tbody');
-    if(!tbody) return;
-    const codOrders = allOrders.filter(o => o.payment_method?.toLowerCase().includes('cod'));
-    if(!codOrders.length) {
-        tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;padding:15px;color:#94a3b8">No COD</td></tr>';
-        return;
-    }
-    tbody.innerHTML = codOrders.map(o => `
-        <tr><td>#${o.order_number || o.id}</td><td><span style="font-size:0.75rem;padding:3px 8px;border-radius:6px;background:#fef3c7;color:#92400e;font-weight:700;">${o.status.toUpperCase()}</span></td><td><strong>₹${o.total}</strong></td></tr>
-    `).join('');
+    const el = document.getElementById('cod-report-tbody');
+    if(!el) return;
+    showLoading('cod-report-tbody');
+    
+    try {
+        const { data: rawOrders, error } = await supabaseClient.from('orders')
+            .select(`*`)
+            .ilike('payment_method', 'cod')
+            .order('created_at', { ascending: false });
+
+        if(error) throw error;
+        
+        // Map addresses and profiles to COD orders
+        const { data: profiles } = await supabaseClient.from('profiles').select('*');
+        const profilesMap = (profiles || []).reduce((acc, p) => { acc[p.id] = p; return acc; }, {});
+        const { data: addresses } = await supabaseClient.from('addresses').select('*');
+        const addrMap = (addresses || []).reduce((acc, a) => { acc[a.id] = a; return acc; }, {});
+
+        const codOrders = (rawOrders || []).map(o => {
+            const addr = addrMap[o.address_id];
+            return {
+                ...o,
+                profile: profilesMap[o.user_id],
+                address: addr,
+                display_name: profilesMap[o.user_id]?.full_name || addr?.full_name || 'Guest'
+            };
+        });
+
+        if(!codOrders || codOrders.length === 0) showEmpty('cod-report-tbody');
+        else {
+            el.innerHTML = codOrders.map(o => `
+                <tr>
+                    <td>${o.order_number || o.id.toString().substring(0,8)}</td>
+                    <td><span class="status-badge status-${o.status}">${o.status}</span></td>
+                    <td>₹${(o.total || 0).toLocaleString()}</td>
+                </tr>
+            `).join('');
+        }
+    } catch(err) { console.error(err); }
 }
 
 function setupRealtime() {
@@ -2901,50 +2953,114 @@ async function printInvoice() {
     const o = currentModalOrder;
     
     // Populate template
-    document.getElementById('inv-num').innerText = `INV-${o.order_number || o.id.toString().substring(0,8).toUpperCase()}`;
-    document.getElementById('inv-date').innerText = `Date: ${new Date(o.created_at).toLocaleDateString()}`;
-    document.getElementById('inv-cust-name').innerText = o.display_name || o.customer_name || 'Guest';
-    document.getElementById('inv-cust-phone').innerText = o.phone || '';
+    document.getElementById('inv-num').innerText = `Invoice# ${o.order_number || o.id.toString().substring(0,8).toUpperCase()}`;
+    const orderDate = new Date(o.created_at);
+    document.getElementById('inv-date').innerText = orderDate.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    document.getElementById('inv-cust-name').innerText = (o.display_name || o.customer_name || 'Guest').toUpperCase();
     
+    // Address & POS
     const addr = o.address_text || o.address_line || (o.address ? `${o.address.address_line || ''}, ${o.address.city || ''}` : 'No address provided');
-    document.getElementById('inv-cust-addr').innerText = addr;
-    document.getElementById('inv-pay-method').innerText = o.payment_method || 'N/A';
+    // For simplicity, check if TN is in address
+    const isLocal = addr.toLowerCase().includes('tamil nadu') || addr.toLowerCase().includes('tn');
+    document.getElementById('inv-cust-pos').innerText = isLocal ? 'Tamil Nadu (33)' : 'Interstate';
     
     // Items
     const tbody = document.getElementById('inv-items-body');
     const { data: items } = await supabaseClient.from('order_items').select('*').eq('order_id', o.id);
     
-    let subtotal = 0;
+    let totalTaxable = 0;
+    let totalIGST = 0;
     if(items && items.length > 0) {
-        tbody.innerHTML = items.map(i => {
-            subtotal += parseFloat(i.total_price);
+        tbody.innerHTML = items.map((i, index) => {
+            const hsn = i.product_name.toLowerCase().includes('honey') ? '040900' : '080450'; 
+            const itemTaxable = parseFloat((i.total_price / 1.05).toFixed(2));
+            const itemIGST = parseFloat((i.total_price - itemTaxable).toFixed(2));
+            const unitTaxable = parseFloat((i.unit_price / 1.05).toFixed(2));
+            
+            totalTaxable += itemTaxable;
+            totalIGST += itemIGST;
+
             return `
-                <tr style="border-bottom:1px solid #f1f5f9">
-                    <td style="padding:12px; font-size:14px">${i.product_name} ${i.weight ? `(${i.weight})` : ''}</td>
-                    <td style="padding:12px; text-align:center; font-size:14px">${i.quantity}</td>
-                    <td style="padding:12px; text-align:right; font-size:14px">₹${i.unit_price}</td>
-                    <td style="padding:12px; text-align:right; font-size:14px; font-weight:600">₹${i.total_price}</td>
+                <tr style="border-bottom:1px solid #eee">
+                    <td style="padding:10px; text-align:left;">${index + 1}</td>
+                    <td style="padding:10px; text-align:left;">
+                        <div style="font-weight:700;">${i.product_name}</div>
+                        <div style="font-size:11px; color:#888;">${i.weight ? `Weight: ${i.weight}` : ''}</div>
+                    </td>
+                    <td style="padding:10px; text-align:left;">${hsn}</td>
+                    <td style="padding:10px; text-align:center;">${i.quantity}</td>
+                    <td style="padding:10px; text-align:right;">${unitTaxable.toFixed(2)}</td>
+                    <td style="padding:10px; text-align:right;">${itemIGST.toFixed(2)}<br><small style="color:#888;font-size:9px;">5%</small></td>
+                    <td style="padding:10px; text-align:right;">${itemTaxable.toFixed(2)}</td>
                 </tr>
             `;
         }).join('');
     } else {
-        tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:20px">No items found</td></tr>';
-        subtotal = o.total;
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:20px">No items found</td></tr>';
+        totalTaxable = o.total / 1.05;
+        totalIGST = o.total - totalTaxable;
     }
 
-    const delivery = o.delivery_fee || 0;
-    document.getElementById('inv-subtotal').innerText = `₹${subtotal}`;
-    document.getElementById('inv-delivery').innerText = delivery > 0 ? `₹${delivery}` : 'FREE';
-    document.getElementById('inv-total').innerText = `₹${o.total}`;
+    const grandTotal = parseFloat(o.total);
+    
+    // Summary
+    const sub_disp = document.getElementById('inv-subtotal');
+    if(sub_disp) sub_disp.innerText = totalTaxable.toFixed(2);
+    const taxable_disp = document.getElementById('inv-taxable');
+    if(taxable_disp) taxable_disp.innerText = totalTaxable.toFixed(2);
+    const tax_val = document.getElementById('inv-tax');
+    if(tax_val) tax_val.innerText = totalIGST.toFixed(2);
+    const total_disp = document.getElementById('inv-total-disp');
+    if(total_disp) total_disp.innerText = `₹${grandTotal.toFixed(2)}`;
+    const words_disp = document.getElementById('inv-words');
+    if(words_disp) words_disp.innerText = numberToWords(grandTotal);
 
     // Print
     const content = document.getElementById('invoice-template').innerHTML;
     const printWindow = window.open('', '_blank');
-    printWindow.document.write(`<html><head><title>Invoice - ${o.order_number}</title></head><body>${content}</body></html>`);
+    printWindow.document.write(`
+        <!DOCTYPE html>
+        <html>
+            <head>
+                <title>&nbsp;</title>
+                <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+                <style>
+                    @page { margin: 0; size: auto; }
+                    html, body { margin: 0; padding: 0; background: #fff; -webkit-print-color-adjust: exact; font-family: 'Inter', sans-serif; }
+                    @media print {
+                        body { padding: 20mm; }
+                        header, footer { display: none !important; }
+                    }
+                    * { box-sizing: border-box; }
+                </style>
+            </head>
+            <body>${content}</body>
+        </html>
+    `);
     printWindow.document.close();
     setTimeout(() => {
         printWindow.print();
-    }, 500);
+    }, 800);
+}
+
+function numberToWords(num) {
+  const ones = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine'];
+  const tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
+  const teens = ['Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
+
+  function convert(n) {
+    if (n < 10) return ones[n];
+    if (n < 20) return teens[n - 10];
+    if (n < 100) return tens[Math.floor(n / 10)] + (n % 10 !== 0 ? ' ' + ones[n % 10] : '');
+    if (n < 1000) return ones[Math.floor(n / 100)] + ' Hundred' + (n % 100 !== 0 ? ' ' + convert(n % 100) : '');
+    if (n < 100000) return convert(Math.floor(n / 1000)) + ' Thousand' + (n % 1000 !== 0 ? ' ' + convert(n % 1000) : '');
+    if (n < 10000000) return convert(Math.floor(n / 100000)) + ' Lakh' + (n % 100000 !== 0 ? ' ' + convert(n % 100000) : '');
+    return '';
+  }
+
+  if (num === 0) return 'Zero';
+  let words = 'Indian Rupee ' + convert(Math.floor(num)) + ' Only';
+  return words;
 }
 
 async function sendInvoice() {
@@ -3038,5 +3154,14 @@ async function syncVarietyPrices(varietyName, basePrice, compareAt) {
         }
     } catch (err) {
         console.error(`Variety sync failed:`, err);
+    }
+}
+
+function checkAuth() {
+    if (localStorage.getItem('adminLoggedIn') !== 'true') {
+        const path = window.location.pathname;
+        if (!path.includes('index.html') && path !== '/' && path !== '') {
+             window.location.href = '/';
+        }
     }
 }

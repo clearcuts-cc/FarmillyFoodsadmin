@@ -895,63 +895,111 @@
     <div class="toast-container" id="toast-container"></div>
 
     <!-- Invoice Print Template (Hidden) -->
+    <!-- Invoice Print Template (Hidden) -->
     <div id="invoice-template" style="display:none">
-        <div style="padding:40px; font-family: 'Inter', sans-serif; color:#333; line-height:1.6">
-            <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:40px; border-bottom:2px solid #059669; padding-bottom:20px">
-                <div>
-                    <h1 style="color:#059669; margin:0; font-size:28px">FARMMILY FARMS</h1>
-                    <p style="margin:5px 0; font-size:14px; color:#666">Premium Heritage Harvests<br>Tamil Nadu, India</p>
+        <div style="padding:40px; font-family: 'Inter', sans-serif; color:#000; line-height:1.4; background:white; max-width:800px; margin:auto;">
+            <!-- Header -->
+            <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:30px;">
+                <div style="width:60%;">
+                    <img src="assets/farmmily logo.png" style="height:55px; margin-bottom:15px; display:block;" onerror="this.src='https://jztreusepxilnfqffwka.supabase.co/storage/v1/object/public/assets/farmmily%20logo.png'">
+                    <div style="font-size:12px; color:#111; font-weight:700; letter-spacing:0.5px;">
+                        FARMMILY AGRO INFRA DEVELOPERS PRIVATE LIMITED<br>
+                        <span style="font-weight:400; color:#555;">
+                            #57 CK Colony, NEW SIDDHAPUDUR<br>
+                            Coimbatore Tamil Nadu 641044, India<br>
+                            GSTIN 33AAGCF5728F1ZR<br>
+                            CIN U01100TZ2023PTC042250<br>
+                            contact@farmmily.com | https://farmmily.com/
+                        </span>
+                    </div>
                 </div>
-                <div style="text-align:right">
-                    <h2 style="margin:0; font-size:20px; color:#111827">TAX INVOICE</h2>
-                    <p style="margin:5px 0; font-size:14px; font-weight:700" id="inv-num">INV-0000</p>
-                    <p style="margin:5px 0; font-size:13px" id="inv-date">Date: </p>
-                </div>
-            </div>
-
-            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:40px; margin-bottom:40px">
-                <div>
-                    <h4 style="margin:0 0 10px 0; text-transform:uppercase; font-size:12px; color:#666">Bill To:</h4>
-                    <p style="margin:0; font-weight:700; font-size:16px" id="inv-cust-name"></p>
-                    <p style="margin:5px 0; font-size:14px" id="inv-cust-phone"></p>
-                    <div style="margin-top:10px; font-size:13px; color:#444" id="inv-cust-addr"></div>
-                </div>
-                <div style="text-align:right">
-                    <h4 style="margin:0 0 10px 0; text-transform:uppercase; font-size:12px; color:#666">Payment Info:</h4>
-                    <p style="margin:0; font-size:14px">Method: <span id="inv-pay-method" style="text-transform:uppercase; font-weight:700"></span></p>
-                    <p style="margin:5px 0; font-size:14px" id="inv-pay-status">Status: Paid</p>
+                <div style="text-align:right;">
+                    <h1 style="font-size:42px; font-weight:400; color:#000; margin:0; line-height:1;">INVOICE</h1>
+                    <div style="color:#555; font-size:13px; margin-top:10px;" id="inv-num">Invoice# 2026-2027/003</div>
                 </div>
             </div>
 
-            <table style="width:100%; border-collapse:collapse; margin-bottom:40px">
+            <!-- Client Info Row -->
+            <div style="margin-bottom:30px; font-size:13px;">
+                <div style="color:#666; font-weight:600; font-size:11px; text-transform:uppercase; margin-bottom:4px;">Bill To</div>
+                <div style="font-weight:700; color:#000; font-size:15px; margin-bottom:10px;" id="inv-cust-name">MR. SUNIL</div>
+                <div style="color:#444; font-weight:500;">Place Of Supply: <span id="inv-cust-pos">Tamil Nadu (33)</span></div>
+            </div>
+
+            <!-- Date Row with Grey Box -->
+            <div style="display:flex; flex-direction:column; margin-bottom:30px;">
+                <div style="background:#555; color:white; padding:5px 12px; font-size:11px; font-weight:700; width:fit-content; border-radius:2px 2px 0 0;">Invoice Date</div>
+                <div style="padding:8px 12px; border:1px solid #ddd; border-top:none; font-size:13px; font-weight:600; width:fit-content; border-radius:0 0 2px 2px;" id="inv-date">14/04/2026</div>
+            </div>
+
+            <!-- Items Table -->
+            <table style="width:100%; border-collapse:collapse; margin:20px 0;">
                 <thead>
-                    <tr style="background:#f9fafb; border-bottom:1px solid #eee">
-                        <th style="text-align:left; padding:12px; font-size:13px; color:#666">Item Description</th>
-                        <th style="text-align:center; padding:12px; font-size:13px; color:#666">Qty</th>
-                        <th style="text-align:right; padding:12px; font-size:13px; color:#666">Rate</th>
-                        <th style="text-align:right; padding:12px; font-size:13px; color:#666">Total</th>
+                    <tr style="background:#444; color:white;">
+                        <th style="padding:8px 10px; text-align:left; font-size:11px; width:30px;">#</th>
+                        <th style="padding:8px 10px; text-align:left; font-size:11px;">Item & Description</th>
+                        <th style="padding:8px 10px; text-align:left; font-size:11px; width:80px;">HSN/SAC</th>
+                        <th style="padding:8px 10px; text-align:center; font-size:11px; width:40px;">Qty</th>
+                        <th style="padding:8px 10px; text-align:right; font-size:11px; width:70px;">Rate</th>
+                        <th style="padding:8px 10px; text-align:right; font-size:11px; width:70px;">IGST</th>
+                        <th style="padding:8px 10px; text-align:right; font-size:11px; width:80px;">Amount</th>
                     </tr>
                 </thead>
-                <tbody id="inv-items-body"></tbody>
+                <tbody id="inv-items-body" style="font-size:12px; color:#111;">
+                    <!-- Items will be injected here -->
+                </tbody>
             </table>
 
-            <div style="display:flex; justify-content:flex-end">
-                <div style="width:250px">
-                    <div style="display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid #eee; font-size:14px">
-                        <span>Subtotal</span><span id="inv-subtotal"></span>
+            <!-- Summary Section -->
+            <div style="display:flex; justify-content:flex-end; margin-top:10px;">
+                <div style="width:250px; font-size:12px;">
+                    <div style="display:flex; justify-content:space-between; padding:4px 0;">
+                        <span style="color:#666;">Sub Total</span>
+                        <span id="inv-subtotal" style="font-weight:600;">0.00</span>
                     </div>
-                    <div style="display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid #eee; font-size:14px">
-                        <span>Delivery</span><span id="inv-delivery"></span>
+                    <div style="display:flex; justify-content:space-between; padding:4px 0;">
+                        <span style="color:#666;">Total Taxable Amount</span>
+                        <span id="inv-taxable" style="font-weight:600;">0.00</span>
                     </div>
-                    <div style="display:flex; justify-content:space-between; padding:15px 0; font-weight:800; font-size:18px; color:#059669">
-                        <span>Grand Total</span><span id="inv-total"></span>
+                    <div style="display:flex; justify-content:space-between; padding:4px 0;">
+                        <span style="color:#666;">IGST5 (5%)</span>
+                        <span id="inv-tax" style="font-weight:600;">0.00</span>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; padding:10px; background:#f5f5f5; font-weight:800; font-size:14px; margin-top:10px; border-radius:4px;">
+                        <span>Total</span>
+                        <span id="inv-total-disp">₹0.00</span>
                     </div>
                 </div>
             </div>
 
-            <div style="margin-top:60px; padding-top:20px; border-top:1px dashed #ccc; text-align:center; font-size:12px; color:#999">
-                Thank you for supporting heritage farming. Fresh from our groves to your home.<br>
-                For support, contact us via the Farmmily portal.
+            <!-- Words Section -->
+            <div style="margin-top:15px; text-align:right; font-size:11px;">
+                <span style="color:#666; font-style:italic;">Total In Words:</span>
+                <span style="font-weight:700; margin-left:10px; color:#111; font-style:italic;" id="inv-words">Indian Rupee Three Hundred Fifteen Only</span>
+            </div>
+
+            <!-- Divider Line -->
+            <div style="border-bottom:1px solid #eee; margin:30px 0;"></div>
+
+            <!-- Footer Section: Bank & Signature -->
+            <div style="display:flex; justify-content:space-between; align-items:flex-end;">
+                <div style="width:65%; font-size:11px; color:#333; line-height:1.6;">
+                    <div style="margin-bottom:8px;">
+                        <span style="font-weight:700;">Account Name:</span> FARMMILY AGRO INFRA DEVELOPERS PRIVATE LIMITED<br>
+                        <span style="font-weight:700;">Account Number:</span> 44555793034<br>
+                        <span style="font-weight:700;">Bank Name:</span> State Bank of India / <span style="font-weight:700;">IFSC Code:</span> SBIN0003690 / <span style="font-weight:700;">Branch:</span> Ganapathy
+                    </div>
+                </div>
+                <div style="width:30%; text-align:right;">
+                    <div style="font-size:11px; margin-bottom:5px; font-weight:600; color:#111;">For, Farmmily Agro Infra Developers Pvt.Ltd.</div>
+                    <div style="height:40px; margin-bottom:10px;">
+                        <!-- Signature placeholder -->
+                        <img src="https://jztreusepxilnfqffwka.supabase.co/storage/v1/object/public/assets/Signature-FARMMILY%20Director.png" style="height:100%;" onerror="this.style.display='none'">
+                    </div>
+                    <div style="font-size:11px; font-weight:700; color:#000;">Sibi Selvan C.</div>
+                    <div style="font-size:10px; color:#555;">Director</div>
+                    <div style="border-top:1px solid #ddd; margin-top:5px; padding-top:4px; font-size:10px; color:#888;">Authorized Signature</div>
+                </div>
             </div>
         </div>
     </div>
@@ -959,4 +1007,3 @@
     <script src="script.js"></script>
 </body>
 </html>
-
