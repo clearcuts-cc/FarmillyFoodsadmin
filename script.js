@@ -2046,7 +2046,7 @@ function setupChart() {
     const maxVal = Math.max(...dayTotals, 1000); // at least 1k for scale
     
     chart.innerHTML = dayTotals.map((val, i) => {
-        const height = (val / maxVal) * 80; // max 80% height
+            const height = (val / maxVal) * 80; // max 80% height
         const displayVal = val >= 1000 ? (val/1000).toFixed(1) + 'k' : val;
         return `
             <div class="bar" style="height: ${height + 10}%">
@@ -2057,7 +2057,7 @@ function setupChart() {
     }).join('');
 }
 
-// --- Add/Edit Product Logic (canonical versions below at line ~2000+) ---
+// --- Add/Edit Product Logic ---
 let editingProductId = null;
 
 function resetProductForm() {
@@ -2078,6 +2078,11 @@ function resetProductForm() {
     if (form?.elements['priority']) form.elements['priority'].value = '100';
     if (form?.elements['variant_quantities']) form.elements['variant_quantities'].value = '3,5,7,10,15';
     if (form?.elements['show_on_shop']) form.elements['show_on_shop'].checked = true;
+    
+    // Set default values for ratings
+    if (form?.elements['rating']) form.elements['rating'].value = '5.0';
+    if (form?.elements['review_count']) form.elements['review_count'].value = '0';
+    
     refreshVariantPreview();
 }
 
@@ -2110,6 +2115,10 @@ async function editProduct(id) {
     form.elements['is_featured'].checked = !!p.is_featured;
     form.elements['show_on_home'].checked = !!p.show_on_home;
     form.elements['show_on_shop'].checked = p.show_on_shop !== false;
+    
+    // Star Rating Fields
+    form.elements['rating'].value = p.rating || '5.0';
+    form.elements['review_count'].value = p.review_count || '0';
 
     const preview = document.getElementById('img-preview');
     if(preview) preview.src = p.image_url || 'https://placehold.co/100';
@@ -2143,57 +2152,57 @@ async function saveProduct(event) {
         slug:                    form.elements['slug'].value.trim(),
         description:             form.elements['description']?.value || null,
         image_url:               form.elements['image_url']?.value || null,
-        // Base price fields (canonical DB columns)
-        base_price:              basePricePerKg,          // DB column: base_price
-        base_price_per_kg:       basePricePerKg,          // extra column
+        base_price:              basePricePerKg,
+        base_price_per_kg:       basePricePerKg,
         compare_at_price_per_kg: compareAtPerKg || null,
-        available_weights:       variantQuantities,        // DB column: available_weights (numeric[])
+        available_weights:       variantQuantities,
         variant_quantities:      variantQuantities.join(','),
-        // Legacy price / weight for backwards-compat display
         price:                   defaultPrice,
         original_price:          defaultOldPrice,
-        weight:                  `${defaultVariantQty}kg`,
-        // Admin controls
-        stock_count:   parseInt(form.elements['stock_count']?.value || 0),
-        priority:      parseInt(form.elements['priority']?.value || 100),
-        in_stock:      form.elements['in_stock']?.checked ?? true,
-        is_active:     form.elements['is_active']?.checked ?? true,
-        is_featured:   form.elements['is_featured']?.checked ?? false,
-        show_on_home:  form.elements['show_on_home']?.checked ?? false,
-        show_on_shop:  form.elements['show_on_shop']?.checked ?? true,
+        stock_count:             parseInt(form.elements['stock_count'].value) || 0,
+        priority:                parseInt(form.elements['priority'].value) || 100,
+        in_stock:                form.elements['in_stock'].checked,
+        is_active:               form.elements['is_active'].checked,
+        is_featured:             form.elements['is_featured'].checked,
+        show_on_home:            form.elements['show_on_home'].checked,
+        show_on_shop:            form.elements['show_on_shop'].checked,
+        rating:                  parseFloat(form.elements['rating'].value) || 5.0,
+        review_count:            parseInt(form.elements['review_count'].value) || 0,
+        updated_at:              new Date().toISOString()
     };
 
-    const result = await saveProductRecordWithFallback(obj, editingProductId);
-
-    if(result.error) {
-        showToast("Error saving product: " + result.error.message, 'error');
-        return;
-    }
-
-    const savedProductId = editingProductId || result.data?.[0]?.id;
     try {
-        if (savedProductId) {
-            await saveProductVariants(savedProductId, form.elements['variant_quantities'].value, {
-                basePricePerKg,
-                compareAtPerKg
-            });
-            await touchProductCatalogSync(savedProductId);
+        const btn = document.getElementById('save-product-btn');
+        btn.disabled = true;
+        btn.innerHTML = '<i class="ph ph-circle-notch spinner"></i> Saving...';
 
-            // CENTRALIZED PRICING SYNC FOR VARIETIES (e.g. Alphonso 3kg, 5kg, etc.)
-            if (obj.category_id === 10) { // 10 = Mangoes
-                const varietyName = obj.name.split('(')[0].trim();
-                await syncVarietyPrices(varietyName, basePricePerKg, compareAtPerKg);
-            }
+        const { data, error } = await saveProductRecordWithFallback(obj, editingProductId);
+        if (error) throw error;
+
+        const productId = data[0].id;
+        await saveProductVariants(productId, form.elements['variant_quantities'].value, {
+            basePricePerKg,
+            compareAtPerKg
+        });
+
+        await touchProductCatalogSync(productId);
+        
+        if (obj.category_id === 10) {
+            const varietyName = obj.name.split(' ')[0];
+            await syncVarietyPrices(varietyName, basePricePerKg, compareAtPerKg);
         }
-    } catch (variantError) {
-        showToast("Product saved, but instant sync failed: " + variantError.message, 'warning');
-    }
 
-    showToast("Product saved successfully ✅");
-    resetProductForm();
-    navigateTo('all-products');
-    renderProducts();
-    renderInventory();
+        showToast(editingProductId ? 'Product Updated! 🥭' : 'New Product Added! 🥭');
+        navigateTo('all-products');
+        renderProducts();
+    } catch (err) {
+        console.error(err);
+        showToast('Error saving product: ' + err.message, 'error');
+    } finally {
+        const btn = document.getElementById('save-product-btn');
+        btn.disabled = false;
+        btn.innerText = editingProductId ? 'Update Product' : 'Save Product';
+    }
 }
 
 // Init
