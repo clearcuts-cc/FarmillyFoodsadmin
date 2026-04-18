@@ -2953,15 +2953,30 @@ async function printInvoice() {
     const o = currentModalOrder;
     
     // Populate template
-    document.getElementById('inv-num').innerText = `Invoice# ${o.order_number || o.id.toString().substring(0,8).toUpperCase()}`;
+    const rawNum = o.order_number ? o.order_number.replace(/\D/g, '') : o.id.toString().substring(0,4);
+    const displayNum = `INV-FF-2026/27-${rawNum.toString().padStart(4, '0')}`;
+    document.getElementById('inv-num').innerText = `Invoice: ${displayNum}`;
+    
     const orderDate = new Date(o.created_at);
     document.getElementById('inv-date').innerText = orderDate.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
     document.getElementById('inv-cust-name').innerText = (o.display_name || o.customer_name || 'Guest').toUpperCase();
     
     // Address & POS
-    const addr = o.address_text || o.address_line || (o.address ? `${o.address.address_line || ''}, ${o.address.city || ''}` : 'No address provided');
+    let addr = '';
+    if (o.address && typeof o.address === 'object') {
+        const a = o.address;
+        addr = `${a.address_line || ''}, ${a.city || ''}, ${a.state || ''} ${a.pincode ? '- ' + a.pincode : ''}`.replace(/^, /, '').trim();
+    } else {
+        addr = o.address_text || o.address_line || (typeof o.address === 'string' ? o.address : '') || 'No address provided';
+    }
+    
+    // Formatting: remove Map link part if it exists in the string
+    if(addr.includes('(Map:')) addr = addr.split('(Map:')[0].trim().replace(/,$/, '');
+    
+    document.getElementById('inv-cust-addr').innerText = addr;
+
     // For simplicity, check if TN is in address
-    const isLocal = addr.toLowerCase().includes('tamil nadu') || addr.toLowerCase().includes('tn');
+    const isLocal = addr.toLowerCase().includes('tamil nadu') || addr.toLowerCase().includes('tn') || addr.includes('33');
     document.getElementById('inv-cust-pos').innerText = isLocal ? 'Tamil Nadu (33)' : 'Interstate';
     
     // Items
