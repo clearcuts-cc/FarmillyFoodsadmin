@@ -1827,9 +1827,9 @@ async function viewOrder(id) {
             const { data: p } = await supabaseClient.from('profiles').select('*').eq('id', o.user_id).single();
             o.profile = p;
         }
-        if(!o.address && o.address_id) {
+        if((!o.address || typeof o.address !== 'object') && o.address_id) {
             const { data: a } = await supabaseClient.from('addresses').select('*').eq('id', o.address_id).single();
-            o.address = a;
+            if (a) o.address = a;
         }
         o.display_name = o.profile?.full_name || o.address?.full_name || 'Guest';
     }
