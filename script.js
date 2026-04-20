@@ -2564,6 +2564,28 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    const skuInput = document.getElementById('sku-input');
+    if(skuInput) {
+        skuInput.addEventListener('change', async (e) => {
+            const typedSku = e.target.value.trim().toUpperCase();
+            if(!typedSku || editingProductId) return;
+
+            // Check if SKU exists in local cache
+            const existing = allProducts.find(p => p.sku === typedSku);
+            if(existing) {
+                const choice = await showConfirm(
+                    "Product ID Found", 
+                    `This ID (${typedSku}) belongs to "${existing.name}". Load its details to update or add variants?`,
+                    "Load Details",
+                    "#2d6a4f"
+                );
+                if(choice) {
+                    editProduct(existing.id);
+                }
+            }
+        });
+    }
+
     // Live Image Previews with Google Drive conversion
     function getDirectLink(url) {
         if(url.includes('drive.google.com')) {
