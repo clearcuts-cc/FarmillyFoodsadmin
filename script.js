@@ -2134,33 +2134,20 @@ function resetProductForm() {
     const btn = document.getElementById('save-product-btn');
     if (btn) btn.innerHTML = '<i class="ph ph-floppy-disk"></i> Save Product';
 
-    // Reset Custom Size Lists
-    const leftList = document.getElementById('custom-size-left-list');
-    const rightList = document.getElementById('custom-size-right-list');
-    if (leftList) leftList.innerHTML = `
-        <input type="text" class="form-control custom-var-size" placeholder="e.g. 3Kg" value="3Kg">
-        <input type="text" class="form-control custom-var-size" placeholder="e.g. 5Kg">
-        <input type="text" class="form-control custom-var-size" placeholder="">
-        <input type="text" class="form-control custom-var-size" placeholder="">
-    `;
-    if (rightList) rightList.innerHTML = `
-        <div style="display:flex; gap:12px;" class="custom-var-row">
-            <input type="text" class="form-control custom-var-id" placeholder="ID (e.g. BANG-3)">
-            <input type="number" class="form-control custom-var-price" placeholder="Price (₹)">
-        </div>
-        <div style="display:flex; gap:12px;" class="custom-var-row">
-            <input type="text" class="form-control custom-var-id" placeholder="ID (e.g. BANG-5)">
-            <input type="number" class="form-control custom-var-price" placeholder="Price (₹)">
-        </div>
-        <div style="display:flex; gap:12px;" class="custom-var-row">
-            <input type="text" class="form-control custom-var-id" placeholder="">
-            <input type="number" class="form-control custom-var-price" placeholder="">
-        </div>
-        <div style="display:flex; gap:12px;" class="custom-var-row">
-            <input type="text" class="form-control custom-var-id" placeholder="">
-            <input type="number" class="form-control custom-var-price" placeholder="">
-        </div>
-    `;
+    // Reset Crate Builder Slots
+    const container = document.getElementById('crate-slots-container');
+    if (container) {
+        const slots = container.querySelectorAll('.crate-slot');
+        slots.forEach((slot, i) => {
+            const idInput = slot.querySelector('.custom-var-id');
+            const sizeInput = slot.querySelector('.custom-var-size');
+            const priceInput = slot.querySelector('.custom-var-price');
+            
+            if (idInput) idInput.value = '';
+            if (sizeInput) sizeInput.value = (i < 2) ? '3Kg' : '5Kg';
+            if (priceInput) priceInput.value = '';
+        });
+    }
 
     if (form?.elements['product_type']) {
         form.elements['product_type'].value = 'standard';
@@ -2182,11 +2169,8 @@ function resetProductForm() {
  * Shows/hides relevant form sections.
  */
 function handleProductTypeChange(type) {
-    const customSizeLeft = document.getElementById('section-custom-size');
-    const customSizeRight = document.getElementById('section-custom-size-right');
-    
-    if (customSizeLeft) customSizeLeft.style.display = (type === 'custom_box') ? 'block' : 'none';
-    if (customSizeRight) customSizeRight.style.display = (type === 'custom_box') ? 'block' : 'none';
+    const crateBuilder = document.getElementById('section-crate-builder');
+    if (crateBuilder) crateBuilder.style.display = (type === 'custom_box') ? 'block' : 'none';
     
     // Hide standard base price section if custom box
     const standardPricing = document.getElementById('standard-pricing-section');
@@ -2341,41 +2325,23 @@ async function editProduct(id) {
     
     // Star Rating Fields
     form.elements['rating'].value = p.rating || '5.0';
-    form.elements['review_count'].value = p.review_count || '0';
-
-    // New Figma fields
-    if (form.elements['harvest_journey']) form.elements['harvest_journey'].value = p.harvest_journey || '';
-    if (form.elements['about_item']) form.elements['about_item'].value = p.about_item || '';
-    if (form.elements['sku']) form.elements['sku'].value = p.sku || '';
-
-    // Load Custom Size Variants if applicable
+    form.elements['review_count'].value = p.review    // Load Crate Builder Slots if applicable
     if (pType === 'custom_box') {
         const { data: variants } = await supabaseClient.from('product_variants').select('*').eq('product_id', id).order('id', { ascending: true });
         
-        const leftList = document.getElementById('custom-size-left-list');
-        const rightList = document.getElementById('custom-size-right-list');
-        
-        if (leftList && rightList && variants && variants.length > 0) {
-            leftList.innerHTML = '';
-            rightList.innerHTML = '';
-            variants.forEach(v => {
-                // Left
-                const lInput = document.createElement('input');
-                lInput.type = 'text';
-                lInput.className = 'form-control custom-var-size';
-                lInput.value = v.label;
-                leftList.appendChild(lInput);
-
-                // Right
-                const rDiv = document.createElement('div');
-                rDiv.style.display = 'flex';
-                rDiv.style.gap = '12px';
-                rDiv.className = 'custom-var-row';
-                rDiv.innerHTML = `
-                    <input type="text" class="form-control custom-var-id" placeholder="ID" value="${v.sku || ''}">
-                    <input type="number" class="form-control custom-var-price" placeholder="Price" value="${v.price || ''}">
-                `;
-                rightList.appendChild(rDiv);
+        const container = document.getElementById('crate-slots-container');
+        if (container && variants && variants.length > 0) {
+            const slots = container.querySelectorAll('.crate-slot');
+            variants.forEach((v, i) => {
+                if (slots[i]) {
+                    const idInput = slots[i].querySelector('.custom-var-id');
+                    const sizeInput = slots[i].querySelector('.custom-var-size');
+                    const priceInput = slots[i].querySelector('.custom-var-price');
+                    
+                    if (idInput) idInput.value = v.sku || '';
+                    if (sizeInput) sizeInput.value = v.label || '';
+                    if (priceInput) priceInput.value = v.price || '';
+                }
             });
         }
     }
@@ -2402,9 +2368,10 @@ async function saveProduct(event) {
     let compareAtPerKg = 0;
 
     if (productType === 'custom_box') {
-        const sizeInputs = document.querySelectorAll('.custom-var-size');
-        const idInputs = document.querySelectorAll('.custom-var-id');
-        const priceInputs = document.querySelectorAll('.custom-var-price');
+        const container = document.getElementById('section-crate-builder');
+        const sizeInputs = container?.querySelectorAll('.custom-var-size') || [];
+        const idInputs = container?.querySelectorAll('.custom-var-id') || [];
+        const priceInputs = container?.querySelectorAll('.custom-var-price') || [];
         
         customVariantPayload = [];
         sizeInputs.forEach((input, i) => {
