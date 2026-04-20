@@ -108,6 +108,22 @@ function showAdminContent() {
     }
 }
 
+function togglePasswordVisibility() {
+    const passwordInput = document.getElementById('login-password');
+    const eyeIcon = document.getElementById('toggle-password');
+    if (passwordInput && eyeIcon) {
+        if (passwordInput.type === 'password') {
+            passwordInput.type = 'text';
+            eyeIcon.classList.remove('ph-eye');
+            eyeIcon.classList.add('ph-eye-slash');
+        } else {
+            passwordInput.type = 'password';
+            eyeIcon.classList.remove('ph-eye-slash');
+            eyeIcon.classList.add('ph-eye');
+        }
+    }
+}
+
 async function handleLogin() {
     const emailInput = document.getElementById('login-email');
     const passInput = document.getElementById('login-password');
