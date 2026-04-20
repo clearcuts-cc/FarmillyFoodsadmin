@@ -1357,3 +1357,26 @@ body.show-login .login-container { display: flex; animation: fadeIn 0.4s ease; }
     font-size: 0.75rem;
     font-weight: 700;
 }
+
+/* ---- All Products Table Refined UI ---- */
+.ap-badge-sm {
+    display: inline-block;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.ap-variant-pill {
+    display: inline-block;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    color: #475569;
+    font-size: 0.7rem;
+    font-weight: 600;
+}
+

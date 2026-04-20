@@ -1011,72 +1011,104 @@ function buildProductsTable(products) {
         const isOutOfStock = p.in_stock === false;
         const basePrice = getBasePricePerKg(p);
         const variantQuantities = getProductVariantQuantities(p);
-        const variantSummary = variantQuantities.length
-            ? variantQuantities.map(qty => `${qty}kg ${formatCurrency(calculateVariantPrice(basePrice, qty))}`).join('<br>')
-            : '<span style="font-size:0.75rem; color:#94a3b8;">No variants</span>';
+        
+        let variantSummary = '';
+        if (variantQuantities.length) {
+            variantSummary = variantQuantities.map(qty => `<span class="ap-variant-pill">${qty}kg - ${formatCurrency(calculateVariantPrice(basePrice, qty))}</span>`).join('');
+        } else {
+            variantSummary = '<span class="ap-variant-pill" style="opacity:0.6">No custom variants</span>';
+        }
+
         const reviewCount = p.review_count ?? p.rating_count ?? 0;
         const averageRating = Number(p.avg_rating ?? p.rating ?? 0);
         const ratingLabel = reviewCount > 0 ? `${averageRating.toFixed(1)} (${reviewCount})` : 'No ratings';
 
         return `
         <tr>
-            <td><img src="${p.image_url || 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=100'}" class="product-img"></td>
+            <!-- Product Details -->
             <td>
-                <strong>${p.name}</strong>
-                <div style="font-size:0.75rem; color:#64748b; margin-top:4px;">
-                    <span style="color:#f59e0b;">★</span> ${ratingLabel}
+                <div style="display:flex; align-items:center; gap:12px;">
+                    <img src="${p.image_url || 'https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=100'}" class="product-img" style="width:50px; height:50px; border-radius:8px; object-fit:cover;">
+                    <div>
+                        <div style="font-weight:700; color:var(--text-main); font-size:14px; margin-bottom:2px;">${p.name}</div>
+                        <div style="font-size:0.75rem; color:#64748b; margin-bottom:4px; display:flex; gap:6px; align-items:center;">
+                            <span style="font-family:monospace; font-weight:600; background:#f1f5f9; padding:2px 6px; border-radius:4px;">${p.sku || 'No SKU'}</span>
+                            <span>•</span>
+                            <span style="color:#f59e0b;">★ ${ratingLabel}</span>
+                        </div>
+                        <div style="display:flex; gap:6px;">
+                            <span class="ap-badge-sm" style="background:#e0f2fe; color:#0369a1">${cat?.name || 'Uncategorized'}</span>
+                            <span class="ap-badge-sm" style="background:#f3f4f6; color:#4b5563">${(p.product_type || 'standard').replace(/_/g, ' ')}</span>
+                        </div>
+                    </div>
                 </div>
             </td>
-            <td>${cat?.name || '-'}</td>
+
+            <!-- Pricing & Variants -->
             <td>
-                <div style="font-weight:700; color:var(--text-main)">Base: ${formatCurrency(basePrice)}/kg</div>
-                <div style="font-size:0.75rem; color:#64748b; font-weight:600">${(p.product_type || 'standard').replace(/_/g, ' ')}</div>
-            </td>
-            <td style="font-size:0.78rem; line-height:1.5">${variantSummary}</td>
-            <td>${p.stock_count}</td>
-            <td>
-                <input type="number" class="form-control" value="${p.priority ?? 100}" min="1" style="width:90px;" onchange="updateProductPriority('${p.id}', this.value)">
-            </td>
-            <td>
-                <div style="display:flex; align-items:center; gap:8px;">
-                    <label class="switch">
-                        <input type="checkbox" ${isOutOfStock ? 'checked' : ''} onchange="toggleProductStock('${p.id}', !this.checked)">
-                        <span class="slider"></span>
-                    </label>
-                    <span style="font-size: 0.75rem; color: ${isOutOfStock ? '#ef4444' : '#10b981'}; font-weight: 600;">
-                        ${isOutOfStock ? 'Out of Stock' : 'In Stock'}
-                    </span>
+                <div style="font-weight:700; color:var(--text-main); margin-bottom:4px">
+                    ${formatCurrency(basePrice)}<span style="font-size:0.75rem; color:#64748b; font-weight:500;">/kg base</span>
+                </div>
+                <div style="display:flex; flex-wrap:wrap; gap:4px; max-width: 250px;">
+                    ${variantSummary}
                 </div>
             </td>
+
+            <!-- Stock & Priority -->
             <td>
-                <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
-                    <label class="switch">
-                        <input type="checkbox" ${p.is_active ? 'checked' : ''} onchange="toggleProductVisibility('${p.id}', this.checked)">
-                        <span class="slider"></span>
-                    </label>
-                    <span style="font-size: 0.75rem; color: ${p.is_active ? '#3b82f6' : '#94a3b8'}; font-weight: 600;">
-                        ${p.is_active ? 'Visible' : 'Hidden'}
-                    </span>
-                </div>
-                <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:8px;">
-                    <span style="font-size:0.75rem; color:var(--text-main); font-weight:700;">Home</span>
-                    <label class="switch">
-                        <input type="checkbox" ${p.show_on_home ? 'checked' : ''} onchange="toggleProductPlacement('${p.id}', 'show_on_home', this.checked)">
-                        <span class="slider"></span>
-                    </label>
-                </div>
-                <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
-                    <span style="font-size:0.75rem; color:#64748b; font-weight:700;">Shop</span>
-                    <label class="switch">
-                        <input type="checkbox" ${p.show_on_shop !== false ? 'checked' : ''} onchange="toggleProductPlacement('${p.id}', 'show_on_shop', this.checked)">
-                        <span class="slider"></span>
-                    </label>
+                <div style="display:flex; flex-direction:column; gap:8px;">
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <input type="number" class="form-control" value="${p.stock_count}" min="0" style="width:60px; padding:4px 8px; font-size:0.85rem; height:auto;" title="Stock Count">
+                        <span style="font-size:0.8rem; color:#64748b;">units in stock</span>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <label class="switch" style="transform:scale(0.85); transform-origin:left center;">
+                            <input type="checkbox" ${isOutOfStock ? 'checked' : ''} onchange="toggleProductStock('${p.id}', !this.checked)">
+                            <span class="slider"></span>
+                        </label>
+                        <span style="font-size:0.75rem; font-weight:600; color:${isOutOfStock ? '#ef4444' : '#10b981'};">
+                            ${isOutOfStock ? 'Out of Stock' : 'In Stock'}
+                        </span>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <input type="number" class="form-control" value="${p.priority ?? 100}" min="1" style="width:60px; padding:4px 8px; font-size:0.85rem; height:auto;" onchange="updateProductPriority('${p.id}', this.value)" title="Priority">
+                        <span style="font-size:0.8rem; color:#64748b;">priority</span>
+                    </div>
                 </div>
             </td>
+
+            <!-- Display Settings -->
             <td>
-                <div style="display:flex; gap:5px">
-                    <button class="action-btn" title="Edit" onclick="editProduct('${p.id}')"><i class="ph ph-pencil-simple"></i></button>
-                    <button class="action-btn btn-delete" title="Delete" onclick="deleteProduct('${p.id}')"><i class="ph ph-trash"></i></button>
+                <div style="display:flex; flex-direction:column; gap:6px;">
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <label class="switch" style="transform:scale(0.8); transform-origin:left center;">
+                            <input type="checkbox" ${p.is_active ? 'checked' : ''} onchange="toggleProductVisibility('${p.id}', this.checked)">
+                            <span class="slider"></span>
+                        </label>
+                        <span style="font-size:0.75rem; font-weight:600; color:${p.is_active ? '#3b82f6' : '#94a3b8'}; width:50px;">Store</span>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <label class="switch" style="transform:scale(0.8); transform-origin:left center;">
+                            <input type="checkbox" ${p.show_on_home ? 'checked' : ''} onchange="toggleProductPlacement('${p.id}', 'show_on_home', this.checked)">
+                            <span class="slider"></span>
+                        </label>
+                        <span style="font-size:0.75rem; font-weight:600; color:${p.show_on_home ? '#8b5cf6' : '#94a3b8'}">Home</span>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <label class="switch" style="transform:scale(0.8); transform-origin:left center;">
+                            <input type="checkbox" ${p.show_on_shop !== false ? 'checked' : ''} onchange="toggleProductPlacement('${p.id}', 'show_on_shop', this.checked)">
+                            <span class="slider"></span>
+                        </label>
+                        <span style="font-size:0.75rem; font-weight:600; color:${p.show_on_shop !== false ? '#ec4899' : '#94a3b8'}">Shop Page</span>
+                    </div>
+                </div>
+            </td>
+
+            <!-- Actions -->
+            <td style="text-align:right">
+                <div style="display:flex; gap:5px; justify-content:flex-end;">
+                    <button class="action-btn" title="Edit Product" onclick="editProduct('${p.id}')"><i class="ph ph-pencil-simple"></i></button>
+                    <button class="action-btn btn-delete" title="Delete Product" onclick="deleteProduct('${p.id}')"><i class="ph ph-trash"></i></button>
                 </div>
             </td>
         </tr>
