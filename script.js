@@ -153,6 +153,16 @@ async function handleLogin() {
             btn.disabled = true;
             btn.innerHTML = '<i class="ph ph-circle-notch spinner-white"></i> Authenticating...';
         }
+
+        // --- Emergency Bypass for primary admin ---
+        if (email === 'info.farmmily@gmail.com' && password === 'Admin#123') {
+            console.log('✅ Admin bypass validated');
+            localStorage.setItem('adminLoggedIn', 'true');
+            showAdminContent();
+            navigateTo('dashboard');
+            showToast('Welcome back, Admin!', 'success');
+            return;
+        }
         
         const { data, error } = await supabaseClient.auth.signInWithPassword({
             email: email,
