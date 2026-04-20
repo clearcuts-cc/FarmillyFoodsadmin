@@ -342,8 +342,8 @@
                                 </div>
 
                                 <!-- ===== CUSTOM SIZE SECTION ===== -->
-                                <div id="section-custom-size">
-                                    <div class="ap-section-label">Custom Size Options</div>
+                                <!-- Standard Pricing & Stock (Hidden if Custom Box) -->
+                                <div id="standard-pricing-section">
                                     <div class="form-group">
                                         <label class="form-label">Variant Quantities (kg)</label>
                                         <input type="text" name="variant_quantities" class="form-control" value="3,5,7,10,15" placeholder="e.g. 3,5,7,10,15">
@@ -369,6 +369,15 @@
                                             <label class="form-label">Display Priority</label>
                                             <input type="number" name="priority" class="form-control" value="100" min="1">
                                         </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Custom Size / Variants (Left Side) -->
+                                <div id="section-custom-size" style="display:none; margin-top: 24px;">
+                                    <label class="form-label" style="font-weight:700; font-size:13px; color:#1e293b;">Custom Size</label>
+                                    <div id="custom-size-left-list" style="display:flex; flex-direction:column; gap:12px; max-width: 200px;">
+                                        <input type="text" class="form-control custom-var-size" placeholder="e.g. 3Kg" value="3Kg">
+                                        <input type="text" class="form-control custom-var-size" placeholder="">
                                     </div>
                                 </div>
 
@@ -427,6 +436,24 @@
                                             <div class="ap-img-placeholder"><i class="ph ph-image"></i></div>
                                             <input type="file" id="prod-file-3" style="display:none" accept="image/*" onchange="handleExtraImageUpload(this, 'img-preview-3')">
                                         </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Custom Size / Variants (Right Side) -->
+                                <div id="section-custom-size-right" style="display:none; margin-top: 24px;">
+                                    <label class="form-label" style="font-weight:700; font-size:13px; color:#1e293b;">Option Product Id</label>
+                                    <div id="custom-size-right-list" style="display:flex; flex-direction:column; gap:12px;">
+                                        <div style="display:flex; gap:12px;" class="custom-var-row">
+                                            <input type="text" class="form-control custom-var-id" placeholder="ID (e.g. BANG-3)">
+                                            <input type="number" class="form-control custom-var-price" placeholder="Price (₹)">
+                                        </div>
+                                        <div style="display:flex; gap:12px;" class="custom-var-row">
+                                            <input type="text" class="form-control custom-var-id" placeholder="">
+                                            <input type="number" class="form-control custom-var-price" placeholder="">
+                                        </div>
+                                    </div>
+                                    <div style="display:flex; justify-content:flex-end; margin-top: 16px;">
+                                        <button type="button" class="btn btn-outline" onclick="addCustomSizePair()" style="border-radius:6px; font-weight:600; padding:6px 24px; font-size:0.85rem; border: 1px solid #1e293b; color: #1e293b; background: transparent; transition: all 0.2s;">ADD</button>
                                     </div>
                                 </div>
 

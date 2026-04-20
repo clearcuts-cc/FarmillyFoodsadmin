@@ -2138,28 +2138,40 @@ function resetProductForm() {
  * Shows/hides relevant form sections.
  */
 function handleProductTypeChange(type) {
-    const variantSection = document.getElementById('section-custom-size');
-    if (!variantSection) return;
-
-    // For all non-custom types we still show variant/price section (standard needs pricing)
-    // For 'multi' we show it too — just re-label it if needed
-    variantSection.style.display = 'block';
+    const customSizeLeft = document.getElementById('section-custom-size');
+    const customSizeRight = document.getElementById('section-custom-size-right');
     
-    // Adjust required attribute on base_price_per_kg
-    const bpInput = document.querySelector('#product-form input[name="base_price_per_kg"]');
-    const scInput = document.querySelector('#product-form input[name="stock_count"]');
+    if (customSizeLeft) customSizeLeft.style.display = (type === 'custom_box') ? 'block' : 'none';
+    if (customSizeRight) customSizeRight.style.display = (type === 'custom_box') ? 'block' : 'none';
     
-    if (type === 'multi') {
-        // For multi-type products, marking fields optional makes sense since multi-products
-        // can be composed of other products; keep but not required
-        if (bpInput) bpInput.required = false;
-        if (scInput) scInput.required = false;
-    } else {
-        if (bpInput) bpInput.required = true;
-        if (scInput) scInput.required = true;
-    }
+    // Hide standard base price section if custom box
+    const standardPricing = document.getElementById('standard-pricing-section');
+    if (standardPricing) standardPricing.style.display = (type === 'custom_box') ? 'none' : 'block';
+}
 
-    refreshVariantPreview();
+function addCustomSizePair() {
+    const leftList = document.getElementById('custom-size-left-list');
+    const rightList = document.getElementById('custom-size-right-list');
+
+    if (!leftList || !rightList) return;
+
+    // Add exactly one empty row to left side
+    const lInput = document.createElement('input');
+    lInput.type = 'text';
+    lInput.className = 'form-control custom-var-size';
+    lInput.placeholder = 'e.g. 10Kg';
+    leftList.appendChild(lInput);
+
+    // Add corresponding row to right side
+    const rDiv = document.createElement('div');
+    rDiv.style.display = 'flex';
+    rDiv.style.gap = '12px';
+    rDiv.className = 'custom-var-row';
+    rDiv.innerHTML = `
+        <input type="text" class="form-control custom-var-id" placeholder="ID (e.g. BANG-10)">
+        <input type="number" class="form-control custom-var-price" placeholder="Price (₹)">
+    `;
+    rightList.appendChild(rDiv);
 }
 
 /**
