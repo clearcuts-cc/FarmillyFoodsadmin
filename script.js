@@ -2588,22 +2588,76 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Also check Option Product IDs in the custom variants list
+    // Also check Option Product IDs in the custom variants list (enhanced with autocomplete)
     document.addEventListener('input', async (e) => {
         if(e.target.classList.contains('custom-var-id')) {
-            const typedSku = e.target.value.trim().toUpperCase();
-            if(!typedSku || typedSku.length < 3) return;
+            const input = e.target;
+            const typedSku = input.value.trim().toUpperCase();
+            
+            // Remove existing dropdown if any
+            const existingDropdown = document.getElementById('sku-autocomplete-list');
+            if(existingDropdown) existingDropdown.remove();
 
-            const existing = allProducts.find(p => p.sku && p.sku.toUpperCase() === typedSku);
-            if(existing) {
-                // Auto-fill the price if we found a match
-                const row = e.target.closest('.custom-var-row');
-                const priceInput = row?.querySelector('.custom-var-price');
-                if(priceInput && !priceInput.value) {
-                    priceInput.value = existing.base_price || 0;
-                    showToast(`Matched ${existing.name} - Price auto-filled!`, 'info');
-                }
+            if(!typedSku || typedSku.length < 2) return;
+
+            const matches = allProducts.filter(p => 
+                (p.sku && p.sku.toUpperCase().includes(typedSku)) || 
+                (p.name && p.name.toUpperCase().includes(typedSku))
+            ).slice(0, 5); // Limit to 5 results
+
+            if(matches.length > 0) {
+                const dropdown = document.createElement('div');
+                dropdown.id = 'sku-autocomplete-list';
+                dropdown.style.cssText = `
+                    position: absolute;
+                    background: white;
+                    border: 1px solid #e2e8f0;
+                    border-radius: 8px;
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+                    z-index: 1000;
+                    width: ${input.offsetWidth}px;
+                    max-height: 200px;
+                    overflow-y: auto;
+                `;
+                
+                const rect = input.getBoundingClientRect();
+                dropdown.style.top = (window.scrollY + rect.bottom + 5) + 'px';
+                dropdown.style.left = (window.scrollX + rect.left) + 'px';
+
+                matches.forEach(p => {
+                    const item = document.createElement('div');
+                    item.style.cssText = `
+                        padding: 8px 12px;
+                        cursor: pointer;
+                        border-bottom: 1px solid #f8fafc;
+                        font-size: 13px;
+                    `;
+                    item.innerHTML = `
+                        <div style="font-weight:700; color:#1e293b;">${p.sku || '-'}</div>
+                        <div style="font-size:11px; color:#64748b;">${p.name} (₹${p.base_price || 0})</div>
+                    `;
+                    item.onclick = () => {
+                        input.value = p.sku;
+                        const row = input.closest('.custom-var-row');
+                        const priceInput = row?.querySelector('.custom-var-price');
+                        if(priceInput) priceInput.value = p.base_price || 0;
+                        dropdown.remove();
+                        showToast(`Selected ${p.name}`, 'info');
+                    };
+                    item.onmouseover = () => item.style.background = '#f1f5f9';
+                    item.onmouseout = () => item.style.background = 'white';
+                    dropdown.appendChild(item);
+                });
+
+                document.body.appendChild(dropdown);
             }
+        }
+    });
+
+    // Close dropdown on click outside
+    document.addEventListener('click', (e) => {
+        if(!e.target.classList.contains('custom-var-id')) {
+            document.getElementById('sku-autocomplete-list')?.remove();
         }
     });
 
