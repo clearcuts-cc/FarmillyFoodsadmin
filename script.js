@@ -1054,6 +1054,7 @@ function buildProductsTable(products) {
                             <span class="ap-badge-sm" style="background:#e0f2fe; color:#0369a1">${cat?.name || 'Uncategorized'}</span>
                             <span class="ap-badge-sm" style="background:#f3f4f6; color:#4b5563">${(p.product_type || 'standard').replace(/_/g, ' ')}</span>
                             <span class="ap-badge-sm" style="background:#fef3c7; color:#92400e; font-weight:700;">PRIO: ${p.priority ?? 100}</span>
+                            ${variantQuantities.map(qty => `<span class="ap-badge-sm" style="background:#ecfdf5; color:#065f46; font-weight:600;">${qty}${qty.toString().match(/[a-zA-Z]/) ? '' : 'kg'}</span>`).join('')}
                         </div>
                     </div>
                 </div>
