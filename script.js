@@ -1025,10 +1025,12 @@ function buildProductsTable(products) {
         const variantQuantities = getProductVariantQuantities(p);
         
         let variantSummary = '';
-        if (variantQuantities.length) {
+        if (p.variants && p.variants.length > 0) {
+            variantSummary = p.variants.map(v => `<span class="ap-variant-pill">${v.label} - ${formatCurrency(v.price || calculateVariantPrice(basePrice, v.quantity_kg))}</span>`).join('');
+        } else if (variantQuantities.length) {
             variantSummary = variantQuantities.map(qty => `<span class="ap-variant-pill">${qty}kg - ${formatCurrency(calculateVariantPrice(basePrice, qty))}</span>`).join('');
         } else {
-            variantSummary = '<span class="ap-variant-pill" style="opacity:0.6">No custom variants</span>';
+            variantSummary = '<span class="ap-variant-pill" style="opacity:0.6">No variants</span>';
         }
 
         const reviewCount = p.review_count ?? p.rating_count ?? 0;
@@ -1775,11 +1777,13 @@ async function saveBanner() {
 
 // --- Utils & Interactions ---
 function filterTable(tableId, text) {
-    if (tableId === 'products-table') { // Match the ID used in index.html
+    if (tableId === 'products-table') { 
+        const lower = text.toLowerCase();
         const filtered = allProducts.filter(p => {
             const cat = allCategories.find(c => c.id === p.category_id);
-            const lower = text.toLowerCase();
-            return p.name.toLowerCase().includes(lower) || (cat?.name || '').toLowerCase().includes(lower);
+            return (p.name || '').toLowerCase().includes(lower) || 
+                   (p.sku || '').toLowerCase().includes(lower) || 
+                   (cat?.name || '').toLowerCase().includes(lower);
         });
         buildProductsTable(filtered);
     }
@@ -2470,8 +2474,8 @@ async function saveProduct(event) {
         if (obj.category_id === 10) {
             const varietyName = obj.name.split(' ')[0];
             await syncVarietyPrices(varietyName, basePricePerKg, compareAtPerKg, obj.image_url);
-        } else {
-            await syncSameNamedProducts(obj.name, obj.image_url);
+        } else if (obj.sku) {
+            await syncSameNamedProducts(obj.sku, obj.image_url);
         }
 
         showToast(editingProductId ? 'Product Updated! 🥭' : 'New Product Added! 🥭');
@@ -2787,11 +2791,14 @@ async function handleFileUpload(input, targetInputNameOrId, previewId) {
                         await syncSameNamedProducts(currentProduct.sku, dataUrl);
                     }
 
-                    // Update local cache
-                    const cached = allProducts.find(p => p.id == editingProductId);
-                    if(cached) cached.image_url = dataUrl;
+                    // Update local cache (for all products with this SKU)
+                    allProducts.forEach(p => {
+                        if (currentProduct && p.sku === currentProduct.sku) {
+                            p.image_url = dataUrl;
+                        }
+                    });
 
-                    showToast('✅ Image updated! User side will reflect shortly.', 'success');
+                    showToast('✅ Image updated! All variants synced.', 'success');
                 } catch(err) {
                     console.error('Image save error:', err);
                     showToast('Image loaded but not saved — click Save Product to apply.', 'warning');
