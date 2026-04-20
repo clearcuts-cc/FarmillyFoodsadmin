@@ -2139,12 +2139,22 @@ function resetProductForm() {
     const rightList = document.getElementById('custom-size-right-list');
     if (leftList) leftList.innerHTML = `
         <input type="text" class="form-control custom-var-size" placeholder="e.g. 3Kg" value="3Kg">
+        <input type="text" class="form-control custom-var-size" placeholder="e.g. 5Kg">
+        <input type="text" class="form-control custom-var-size" placeholder="">
         <input type="text" class="form-control custom-var-size" placeholder="">
     `;
     if (rightList) rightList.innerHTML = `
         <div style="display:flex; gap:12px;" class="custom-var-row">
             <input type="text" class="form-control custom-var-id" placeholder="ID (e.g. BANG-3)">
             <input type="number" class="form-control custom-var-price" placeholder="Price (₹)">
+        </div>
+        <div style="display:flex; gap:12px;" class="custom-var-row">
+            <input type="text" class="form-control custom-var-id" placeholder="ID (e.g. BANG-5)">
+            <input type="number" class="form-control custom-var-price" placeholder="Price (₹)">
+        </div>
+        <div style="display:flex; gap:12px;" class="custom-var-row">
+            <input type="text" class="form-control custom-var-id" placeholder="">
+            <input type="number" class="form-control custom-var-price" placeholder="">
         </div>
         <div style="display:flex; gap:12px;" class="custom-var-row">
             <input type="text" class="form-control custom-var-id" placeholder="">
