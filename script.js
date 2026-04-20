@@ -1050,9 +1050,10 @@ function buildProductsTable(products) {
                             <span>•</span>
                             <span style="color:#f59e0b;">★ ${ratingLabel}</span>
                         </div>
-                        <div style="display:flex; gap:6px;">
+                        <div style="display:flex; gap:6px; margin-top:6px; flex-wrap: wrap;">
                             <span class="ap-badge-sm" style="background:#e0f2fe; color:#0369a1">${cat?.name || 'Uncategorized'}</span>
                             <span class="ap-badge-sm" style="background:#f3f4f6; color:#4b5563">${(p.product_type || 'standard').replace(/_/g, ' ')}</span>
+                            <span class="ap-badge-sm" style="background:#fef3c7; color:#92400e; font-weight:700;">PRIO: ${p.priority ?? 100}</span>
                         </div>
                     </div>
                 </div>
@@ -1085,8 +1086,8 @@ function buildProductsTable(products) {
                         </span>
                     </div>
                     <div style="display:flex; align-items:center; gap:8px;">
-                        <input type="number" class="form-control" value="${p.priority ?? 100}" min="1" style="width:60px; padding:4px 8px; font-size:0.85rem; height:auto;" onchange="updateProductPriority('${p.id}', this.value)" title="Priority">
-                        <span style="font-size:0.8rem; color:#64748b;">priority</span>
+                        <input type="number" class="form-control" value="${p.priority ?? 100}" min="1" style="width:60px; padding:4px 8px; font-size:0.85rem; height:auto; border-color:#f59e0b;" onchange="updateProductPriority('${p.id}', this.value)" title="Priority">
+                        <span style="font-size:0.8rem; color:#b45309; font-weight:600;">priority</span>
                     </div>
                 </div>
             </td>
@@ -2175,6 +2176,24 @@ function handleProductTypeChange(type) {
     // Hide standard base price section if custom box
     const standardPricing = document.getElementById('standard-pricing-section');
     if (standardPricing) standardPricing.style.display = (type === 'custom_box') ? 'none' : 'block';
+}
+
+function addCrateSlot() {
+    const container = document.getElementById('crate-slots-container');
+    if (!container) return;
+    const slotCount = container.querySelectorAll('.crate-slot').length + 1;
+    const slot = document.createElement('div');
+    slot.className = 'crate-slot';
+    slot.style.cssText = 'background:white; padding:10px; border-radius:8px; border:1px solid #cbd5e1;';
+    slot.innerHTML = `
+        <span style="font-size:10px; font-weight:800; color:#94a3b8; display:block; margin-bottom:6px; text-transform:uppercase;">Variety ${slotCount}</span>
+        <input type="text" class="form-control custom-var-id" placeholder="ID" style="margin-bottom:8px; font-size:12px; padding:6px;">
+        <div style="display:flex; gap:6px;">
+            <input type="text" class="form-control custom-var-size" placeholder="Size" style="flex:1; font-size:11px; padding:4px;">
+            <input type="number" class="form-control custom-var-price" placeholder="Price" style="flex:1; font-size:11px; padding:4px;">
+        </div>
+    `;
+    container.appendChild(slot);
 }
 
 function addCustomSizePair() {
