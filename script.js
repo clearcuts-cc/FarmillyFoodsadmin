@@ -125,6 +125,16 @@ async function handleLogin() {
             btn.innerHTML = '<i class="ph ph-circle-notch spinner-white"></i> Authenticating...';
         }
         
+        // --- Fallback Hardcoded Login for immediate access ---
+        if (email === 'info.farmmily@gmail.com' && password === 'Admin#123') {
+            console.log('✅ Secondary auth bypass used');
+            localStorage.setItem('adminLoggedIn', 'true');
+            showAdminContent();
+            navigateTo('dashboard');
+            showToast('Welcome back, Admin!', 'success');
+            return;
+        }
+
         const { data, error } = await supabaseClient.auth.signInWithPassword({
             email: email,
             password: password
