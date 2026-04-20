@@ -2566,17 +2566,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const skuInput = document.getElementById('sku-input');
     if(skuInput) {
-        skuInput.addEventListener('change', async (e) => {
+        let lastCheckedSku = '';
+        skuInput.addEventListener('input', async (e) => {
             const typedSku = e.target.value.trim().toUpperCase();
-            if(!typedSku || editingProductId) return;
-
+            if(!typedSku || typedSku.length < 3 || editingProductId || typedSku === lastCheckedSku) return;
+            
             // Check if SKU exists in local cache
-            const existing = allProducts.find(p => p.sku === typedSku);
+            const existing = allProducts.find(p => p.sku && p.sku.toUpperCase() === typedSku);
             if(existing) {
+                lastCheckedSku = typedSku;
                 const choice = await showConfirm(
                     "Product ID Found", 
-                    `This ID (${typedSku}) belongs to "${existing.name}". Load its details to update or add variants?`,
-                    "Load Details",
+                    `This ID (${typedSku}) belongs to "${existing.name}". Load its details to update?`,
+                    "Load Product Details",
                     "#2d6a4f"
                 );
                 if(choice) {
@@ -2585,6 +2587,25 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     }
+
+    // Also check Option Product IDs in the custom variants list
+    document.addEventListener('input', async (e) => {
+        if(e.target.classList.contains('custom-var-id')) {
+            const typedSku = e.target.value.trim().toUpperCase();
+            if(!typedSku || typedSku.length < 3) return;
+
+            const existing = allProducts.find(p => p.sku && p.sku.toUpperCase() === typedSku);
+            if(existing) {
+                // Auto-fill the price if we found a match
+                const row = e.target.closest('.custom-var-row');
+                const priceInput = row?.querySelector('.custom-var-price');
+                if(priceInput && !priceInput.value) {
+                    priceInput.value = existing.base_price || 0;
+                    showToast(`Matched ${existing.name} - Price auto-filled!`, 'info');
+                }
+            }
+        }
+    });
 
     // Live Image Previews with Google Drive conversion
     function getDirectLink(url) {
