@@ -109,8 +109,10 @@ function showAdminContent() {
 }
 
 function togglePasswordVisibility() {
+    console.log('👁️ Toggling password visibility...');
     const passwordInput = document.getElementById('login-password');
     const eyeIcon = document.getElementById('toggle-password');
+    
     if (passwordInput && eyeIcon) {
         if (passwordInput.type === 'password') {
             passwordInput.type = 'text';
@@ -121,6 +123,8 @@ function togglePasswordVisibility() {
             eyeIcon.classList.remove('ph-eye-slash');
             eyeIcon.classList.add('ph-eye');
         }
+    } else {
+        console.error('❌ Could not find password input or eye icon');
     }
 }
 
