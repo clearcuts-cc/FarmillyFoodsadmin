@@ -24,22 +24,23 @@
                 <p>Enter your admin email to receive a secure login link</p>
             </div>
             
-            <form onsubmit="event.preventDefault(); handleMagicLinkLogin();">
+            <form onsubmit="event.preventDefault(); handleLogin();">
                 <div class="form-group">
                     <label class="form-label">Admin Email</label>
                     <input type="email" id="login-email" class="form-control" placeholder="info.farmmily@gmail.com" required>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Password</label>
+                    <input type="password" id="login-password" class="form-control" placeholder="••••••••" required>
                 </div>
                 
                 <div id="login-error-msg" style="color: #ef4444; background: #fee2e2; padding: 12px; border-radius: 12px; font-weight: 600; margin-bottom: 20px; display: none; text-align: center; font-size: 0.85rem;">
                     <i class="ph ph-warning-circle"></i> Invalid email or auth error
                 </div>
 
-                <div id="login-success-msg" style="color: #166534; background: #dcfce7; padding: 12px; border-radius: 12px; font-weight: 600; margin-bottom: 20px; display: none; text-align: center; font-size: 0.85rem;">
-                    <i class="ph ph-check-circle"></i> Magic link sent! Check your inbox.
-                </div>
-
-                <button type="submit" id="send-link-btn" class="login-btn">
-                    <i class="ph ph-paper-plane-tilt"></i> Send Magic Link
+                <button type="submit" id="login-btn" class="login-btn">
+                    <i class="ph ph-sign-in"></i> Login to Dashboard
                 </button>
             </form>
 
