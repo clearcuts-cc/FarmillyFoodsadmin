@@ -125,16 +125,6 @@ async function handleLogin() {
             btn.innerHTML = '<i class="ph ph-circle-notch spinner-white"></i> Authenticating...';
         }
         
-        // --- Fallback Hardcoded Login for immediate access ---
-        if (email === 'info.farmmily@gmail.com' && password === 'Admin#123') {
-            console.log('✅ Secondary auth bypass used');
-            localStorage.setItem('adminLoggedIn', 'true');
-            showAdminContent();
-            navigateTo('dashboard');
-            showToast('Welcome back, Admin!', 'success');
-            return;
-        }
-
         const { data, error } = await supabaseClient.auth.signInWithPassword({
             email: email,
             password: password
@@ -173,6 +163,94 @@ function handleLogout() {
 }
 
 
+
+/**
+ * --- Coupons Logic ---
+ */
+let allCoupons = [];
+
+async function loadCoupons() {
+    if (!supabaseClient) return;
+    const { data, error } = await supabaseClient.from('coupons').select('*').order('created_at', { ascending: false });
+    if (!error) {
+        allCoupons = data;
+        renderCoupons();
+    }
+}
+
+function renderCoupons() {
+    const list = document.getElementById('coupons-table-body');
+    if (!list) return;
+
+    if (allCoupons.length === 0) {
+        list.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:40px; color:#94a3b8;">No coupons found. Create your first discount!</td></tr>';
+        return;
+    }
+
+    list.innerHTML = allCoupons.map(cp => `
+        <tr>
+            <td><span class="badge" style="background:#f1f5f9; color:var(--text-main); font-family:monospace; font-size:0.9rem; border:1px solid #e2e8f0;">${cp.code}</span></td>
+            <td style="text-transform:capitalize; font-size:0.85rem">${cp.discount_type === 'percent' ? 'Percentage' : 'Flat Amount'}</td>
+            <td style="font-weight:700">
+                ${cp.discount_type === 'percent' ? cp.discount_value + '%' : '₹' + cp.discount_value}
+            </td>
+            <td style="font-size:0.85rem">₹${cp.min_order_value || 0}</td>
+            <td style="font-size:0.85rem">
+                <div style="display:flex; align-items:center; gap:8px">
+                    <span style="font-weight:700; color:var(--primary)">${cp.used_count || 0}</span>
+                    <span style="color:#94a3b8">/</span>
+                    <span style="color:#64748b">${cp.max_uses || '∞'}</span>
+                </div>
+            </td>
+            <td>
+                <span class="status-badge ${cp.active ? 'status-paid' : 'status-pending'}">
+                    ${cp.active ? 'Active' : 'Inactive'}
+                </span>
+            </td>
+            <td style="text-align:right">
+                <button class="btn btn-outline" onclick="deleteCoupon(${cp.id})" style="padding:6px; color:#ef4444; border-color:#fee2e2;">
+                    <i class="ph ph-trash"></i>
+                </button>
+            </td>
+        </tr>
+    `).join('');
+}
+
+async function saveCoupon() {
+    const form = document.getElementById('coupon-form');
+    if (!form.checkValidity()) {
+        form.reportValidity();
+        return;
+    }
+
+    const formData = new FormData(form);
+    const payload = {
+        code: formData.get('code').toUpperCase(),
+        discount_type: formData.get('discount_type') === 'percentage' ? 'percent' : 'flat',
+        discount_value: parseFloat(formData.get('discount_value')),
+        min_order_value: parseFloat(formData.get('min_order_value')) || 0,
+        active: true
+    };
+
+    const { error } = await supabaseClient.from('coupons').insert([payload]);
+    if (error) {
+        showToast('Error saving coupon: ' + error.message, 'error');
+    } else {
+        showToast('Coupon created successfully!', 'success');
+        closeModal('couponModal');
+        form.reset();
+        loadCoupons();
+    }
+}
+
+async function deleteCoupon(id) {
+    if (!confirm('Are you sure you want to delete this coupon?')) return;
+    const { error } = await supabaseClient.from('coupons').delete().eq('id', id);
+    if (!error) {
+        showToast('Coupon deleted');
+        loadCoupons();
+    }
+}
 
 // --- Navigation Logic ---
 function navigateTo(pageId, push = true) {
