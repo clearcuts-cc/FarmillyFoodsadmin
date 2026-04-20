@@ -438,65 +438,21 @@
                                         <i class="ph ph-package"></i> Mixed Crate / 4-Variety Builder
                                     </label>
                                     
-                                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px;">
-                                        <!-- 3Kg Section -->
-                                        <div style="background:#f8fafc; padding:12px; border-radius:12px; border:1px dashed #cbd5e1;">
-                                            <h4 style="font-size:12px; color:#475569; margin-bottom:12px; display:flex; align-items:center; gap:6px;">
-                                                <i class="ph ph-package" style="color:#2d6a4f"></i> 3Kg Variety List
-                                            </h4>
-                                            <div id="crate-slots-3kg" style="display:flex; flex-direction:column; gap:10px;">
-                                                <!-- Variety 1 -->
-                                                <div class="crate-slot" style="background:white; padding:10px; border-radius:8px; border:1px solid #cbd5e1;">
-                                                    <span style="font-size:10px; font-weight:800; color:#94a3b8; display:block; margin-bottom:6px; text-transform:uppercase;">Variety 1 (3Kg)</span>
-                                                    <input type="text" class="form-control custom-var-id" placeholder="Product ID / Name" style="margin-bottom:8px; font-size:12px; padding:6px;">
-                                                    <div style="display:flex; gap:6px;">
-                                                        <input type="hidden" class="custom-var-size" value="3">
-                                                        <input type="hidden" class="custom-var-unit" value="Kg">
-                                                        <input type="number" class="form-control custom-var-price" placeholder="Price" style="flex:1; font-size:12px; padding:4px;">
-                                                    </div>
-                                                </div>
-                                                <!-- Variety 2 -->
-                                                <div class="crate-slot" style="background:white; padding:10px; border-radius:8px; border:1px solid #cbd5e1;">
-                                                    <span style="font-size:10px; font-weight:800; color:#94a3b8; display:block; margin-bottom:6px; text-transform:uppercase;">Variety 2 (3Kg)</span>
-                                                    <input type="text" class="form-control custom-var-id" placeholder="Product ID / Name" style="margin-bottom:8px; font-size:12px; padding:6px;">
-                                                    <div style="display:flex; gap:6px;">
-                                                        <input type="hidden" class="custom-var-size" value="3">
-                                                        <input type="hidden" class="custom-var-unit" value="Kg">
-                                                        <input type="number" class="form-control custom-var-price" placeholder="Price" style="flex:1; font-size:12px; padding:4px;">
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            <button type="button" class="btn btn-outline" onclick="addCrateSlot('3kg')" style="width:100%; margin-top:10px; font-size:11px; padding:5px; border-style:dashed;">+ Add 3Kg Variety</button>
-                                        </div>
+                                    <div id="size-groups-container" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap:20px; align-items: start;">
+                                        <!-- Groups will be injected here dynamically -->
+                                    </div>
 
-                                        <!-- 5Kg Section -->
-                                        <div style="background:#f8fafc; padding:12px; border-radius:12px; border:1px dashed #cbd5e1;">
-                                            <h4 style="font-size:12px; color:#475569; margin-bottom:12px; display:flex; align-items:center; gap:6px;">
-                                                <i class="ph ph-package" style="color:#2d6a4f"></i> 5Kg Variety List
-                                            </h4>
-                                            <div id="crate-slots-5kg" style="display:flex; flex-direction:column; gap:10px;">
-                                                <!-- Variety 3 -->
-                                                <div class="crate-slot" style="background:white; padding:10px; border-radius:8px; border:1px solid #cbd5e1;">
-                                                    <span style="font-size:10px; font-weight:800; color:#94a3b8; display:block; margin-bottom:6px; text-transform:uppercase;">Variety 1 (5Kg)</span>
-                                                    <input type="text" class="form-control custom-var-id" placeholder="Product ID / Name" style="margin-bottom:8px; font-size:12px; padding:6px;">
-                                                    <div style="display:flex; gap:6px;">
-                                                        <input type="hidden" class="custom-var-size" value="5">
-                                                        <input type="hidden" class="custom-var-unit" value="Kg">
-                                                        <input type="number" class="form-control custom-var-price" placeholder="Price" style="flex:1; font-size:12px; padding:4px;">
-                                                    </div>
-                                                </div>
-                                                <!-- Variety 4 -->
-                                                <div class="crate-slot" style="background:white; padding:10px; border-radius:8px; border:1px solid #cbd5e1;">
-                                                    <span style="font-size:10px; font-weight:800; color:#94a3b8; display:block; margin-bottom:6px; text-transform:uppercase;">Variety 2 (5Kg)</span>
-                                                    <input type="text" class="form-control custom-var-id" placeholder="Product ID / Name" style="margin-bottom:8px; font-size:12px; padding:6px;">
-                                                    <div style="display:flex; gap:6px;">
-                                                        <input type="hidden" class="custom-var-size" value="5">
-                                                        <input type="hidden" class="custom-var-unit" value="Kg">
-                                                        <input type="number" class="form-control custom-var-price" placeholder="Price" style="flex:1; font-size:12px; padding:4px;">
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            <button type="button" class="btn btn-outline" onclick="addCrateSlot('5kg')" style="width:100%; margin-top:10px; font-size:11px; padding:5px; border-style:dashed;">+ Add 5Kg Variety</button>
+                                    <div style="display:flex; justify-content:center; margin-top: 20px; padding: 15px; background: #f1f5f9; border-radius: 12px; border: 2px dashed #cbd5e1;">
+                                        <div style="display:flex; gap:10px; align-items:center;">
+                                            <span style="font-size:13px; font-weight:700; color:#475569;">Add New Weight Category:</span>
+                                            <input type="number" id="new-group-weight" placeholder="e.g. 7" style="width:70px; padding:6px; border-radius:6px; border:1px solid #cbd5e1;">
+                                            <select id="new-group-unit" style="padding:6px; border-radius:6px; border:1px solid #cbd5e1;">
+                                                <option value="Kg">Kg</option>
+                                                <option value="Gm">Gm</option>
+                                            </select>
+                                            <button type="button" class="btn btn-primary" onclick="addNewWeightGroup()" style="padding:6px 15px; font-size:12px; background:#2d6a4f; border:none; border-radius:6px; font-weight:700;">
+                                                + CREATE GROUP
+                                            </button>
                                         </div>
                                     </div>
                                 </div>

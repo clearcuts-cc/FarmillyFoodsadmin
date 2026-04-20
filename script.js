@@ -2136,23 +2136,14 @@ function resetProductForm() {
     const btn = document.getElementById('save-product-btn');
     if (btn) btn.innerHTML = '<i class="ph ph-floppy-disk"></i> Save Product';
 
-    // Reset Crate Builder Slots
-    ['3kg', '5kg'].forEach(type => {
-        const container = document.getElementById(`crate-slots-${type}`);
-        if(container) {
-            const slots = container.querySelectorAll('.crate-slot');
-            slots.forEach((slot, i) => {
-                if(i >= 2) {
-                    slot.remove();
-                } else {
-                    const idInput = slot.querySelector('.custom-var-id');
-                    const priceInput = slot.querySelector('.custom-var-price');
-                    if(idInput) idInput.value = '';
-                    if(priceInput) priceInput.value = '';
-                }
-            });
-        }
-    });
+    // Reset Crate Builder Groups
+    const groupContainer = document.getElementById('size-groups-container');
+    if (groupContainer) {
+        groupContainer.innerHTML = '';
+        // Re-create default 3kg and 5kg groups
+        addNewWeightGroup(3, 'Kg');
+        addNewWeightGroup(5, 'Kg');
+    }
 
     if (form?.elements['product_type']) {
         form.elements['product_type'].value = 'standard';
@@ -2182,24 +2173,65 @@ function handleProductTypeChange(type) {
     if (standardPricing) standardPricing.style.display = (type === 'custom_box') ? 'none' : 'block';
 }
 
-function addCrateSlot(target) {
-    const container = document.getElementById(`crate-slots-${target}`);
-    if (!container) return;
-    const slotCount = container.querySelectorAll('.crate-slot').length + 1;
-    const size = target === '3kg' ? '3' : '5';
+function addNewWeightGroup(val, unit) {
+    const groupContainer = document.getElementById('size-groups-container');
+    if (!groupContainer) return;
+
+    if (!val) {
+        val = document.getElementById('new-group-weight')?.value;
+        unit = document.getElementById('new-group-unit')?.value || 'Kg';
+    }
+    if (!val) return;
+
+    const groupId = `group-${val}${unit}`.replace(/[^a-zA-Z0-9]/g, '');
+    if (document.getElementById(groupId)) {
+        showToast('Group already exists', 'warning');
+        return;
+    }
+
+    const groupDiv = document.createElement('div');
+    groupDiv.id = groupId;
+    groupDiv.className = 'size-group-section';
+    groupDiv.style.cssText = 'background:#f8fafc; padding:12px; border-radius:12px; border:1px dashed #cbd5e1;';
+    groupDiv.innerHTML = `
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+            <h4 style="font-size:12px; color:#475569; display:flex; align-items:center; gap:6px; margin:0;">
+                <i class="ph ph-package" style="color:#2d6a4f"></i> ${val}${unit} Variety List
+            </h4>
+            <button type="button" onclick="this.closest('.size-group-section').remove()" style="background:none; border:none; color:#ef4444; font-size:16px; cursor:pointer;"><i class="ph ph-trash"></i></button>
+        </div>
+        <div class="crate-slots-list" style="display:flex; flex-direction:column; gap:10px;"></div>
+        <button type="button" class="btn btn-outline" onclick="addCrateSlotToGroup('${groupId}', '${val}', '${unit}')" style="width:100%; margin-top:10px; font-size:11px; padding:5px; border-style:dashed;">+ Add ${val}${unit} Variety</button>
+    `;
+
+    groupContainer.appendChild(groupDiv);
+    
+    // Add 2 initial slots
+    addCrateSlotToGroup(groupId, val, unit);
+    addCrateSlotToGroup(groupId, val, unit);
+
+    if (document.getElementById('new-group-weight')) document.getElementById('new-group-weight').value = '';
+}
+
+function addCrateSlotToGroup(groupId, val, unit) {
+    const list = document.querySelector(`#${groupId} .crate-slots-list`);
+    if (!list) return;
+
+    const slotCount = list.querySelectorAll('.crate-slot').length + 1;
     const slot = document.createElement('div');
     slot.className = 'crate-slot';
-    slot.style.cssText = 'background:white; padding:10px; border-radius:8px; border:1px solid #cbd5e1;';
+    slot.style.cssText = 'background:white; padding:10px; border-radius:8px; border:1px solid #cbd5e1; position:relative;';
     slot.innerHTML = `
-        <span style="font-size:10px; font-weight:800; color:#94a3b8; display:block; margin-bottom:6px; text-transform:uppercase;">Variety ${slotCount} (${size}Kg)</span>
+        <span style="font-size:10px; font-weight:800; color:#94a3b8; display:block; margin-bottom:6px; text-transform:uppercase;">Variety ${slotCount} (${val}${unit})</span>
+        <button type="button" onclick="this.parentElement.remove()" style="position:absolute; top:8px; right:8px; background:none; border:none; color:#94a3b8; font-size:12px; cursor:pointer;"><i class="ph ph-x"></i></button>
         <input type="text" class="form-control custom-var-id" placeholder="Product ID / Name" style="margin-bottom:8px; font-size:12px; padding:6px;">
         <div style="display:flex; gap:6px;">
-            <input type="hidden" class="custom-var-size" value="${size}">
-            <input type="hidden" class="custom-var-unit" value="Kg">
+            <input type="hidden" class="custom-var-size" value="${val}">
+            <input type="hidden" class="custom-var-unit" value="${unit}">
             <input type="number" class="form-control custom-var-price" placeholder="Price" style="flex:1; font-size:12px; padding:4px;">
         </div>
     `;
-    container.appendChild(slot);
+    list.appendChild(slot);
 }
 
 function addCustomSizePair() {
@@ -2355,22 +2387,32 @@ async function editProduct(id) {
         const { data: variants } = await supabaseClient.from('product_variants').select('*').eq('product_id', id).order('id', { ascending: true });
         
         if (variants && variants.length > 0) {
+            const groupContainer = document.getElementById('size-groups-container');
+            if(groupContainer) groupContainer.innerHTML = ''; // Clear existing
+
             variants.forEach(v => {
                 const label = v.label || '';
-                const target = label.toLowerCase().includes('3kg') ? '3kg' : '5kg';
-                const container = document.getElementById(`crate-slots-${target}`);
-                if (container) {
-                    // Find first empty slot in this container or add new one
-                    let emptySlot = Array.from(container.querySelectorAll('.crate-slot')).find(s => !s.querySelector('.custom-var-id').value);
-                    if (!emptySlot) {
-                        addCrateSlot(target);
-                        emptySlot = container.lastElementChild;
-                    }
+                // Split label (e.g. "7Kg") into value and unit
+                const match = label.match(/^(\d+)(.*)$/);
+                const val = match ? match[1] : '3';
+                const unit = match ? match[2] : 'Kg';
 
-                    if (emptySlot) {
-                        emptySlot.querySelector('.custom-var-id').value = v.sku || '';
-                        emptySlot.querySelector('.custom-var-price').value = v.price || '';
-                    }
+                const groupId = `group-${val}${unit}`.replace(/[^a-zA-Z0-9]/g, '');
+                if (!document.getElementById(groupId)) {
+                    addNewWeightGroup(val, unit);
+                }
+
+                const list = document.querySelector(`#${groupId} .crate-slots-list`);
+                // Find first slot in this group without an ID, or add new one
+                let targetSlot = Array.from(list.querySelectorAll('.crate-slot')).find(s => !s.querySelector('.custom-var-id').value);
+                if (!targetSlot) {
+                    addCrateSlotToGroup(groupId, val, unit);
+                    targetSlot = list.lastElementChild;
+                }
+
+                if (targetSlot) {
+                    targetSlot.querySelector('.custom-var-id').value = v.sku || '';
+                    targetSlot.querySelector('.custom-var-price').value = v.price || '';
                 }
             });
         }
@@ -2398,8 +2440,8 @@ async function saveProduct(event) {
     let compareAtPerKg = 0;
 
     if (productType === 'custom_box') {
-        const container = document.getElementById('section-crate-builder');
-        const allSlots = container?.querySelectorAll('.crate-slot') || [];
+        const groupContainer = document.getElementById('size-groups-container');
+        const allSlots = groupContainer?.querySelectorAll('.crate-slot') || [];
         
         customVariantPayload = [];
         allSlots.forEach(slot => {
