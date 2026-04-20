@@ -438,20 +438,26 @@
                                         <i class="ph ph-package"></i> Mixed Crate / 4-Variety Builder
                                     </label>
                                     
-                                    <div id="size-groups-container" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap:20px; align-items: start;">
+                                    <div id="size-groups-container" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap:24px; align-items: start;">
                                         <!-- Groups will be injected here dynamically -->
                                     </div>
 
-                                    <div style="display:flex; justify-content:center; margin-top: 20px; padding: 15px; background: #f1f5f9; border-radius: 12px; border: 2px dashed #cbd5e1;">
-                                        <div style="display:flex; gap:10px; align-items:center;">
-                                            <span style="font-size:13px; font-weight:700; color:#475569;">Add New Weight Category:</span>
-                                            <input type="number" id="new-group-weight" placeholder="e.g. 7" style="width:70px; padding:6px; border-radius:6px; border:1px solid #cbd5e1;">
-                                            <select id="new-group-unit" style="padding:6px; border-radius:6px; border:1px solid #cbd5e1;">
-                                                <option value="Kg">Kg</option>
-                                                <option value="Gm">Gm</option>
-                                            </select>
-                                            <button type="button" class="btn btn-primary" onclick="addNewWeightGroup()" style="padding:6px 15px; font-size:12px; background:#2d6a4f; border:none; border-radius:6px; font-weight:700;">
-                                                + CREATE GROUP
+                                    <div style="margin-top: 32px; padding: 24px; background: #ffffff; border-radius: 16px; border: 1px solid #e2e8f0; box-shadow: var(--shadow-sm); display: flex; flex-direction: column; align-items: center; gap: 16px;">
+                                        <div style="text-align: center;">
+                                            <h5 style="margin: 0 0 4px 0; font-size: 14px; color: var(--text-main); font-weight: 800;">Create Custom Weight Category</h5>
+                                            <p style="margin: 0; font-size: 11px; color: var(--text-muted);">Add sections for 7Kg, 10Kg, or any custom box size</p>
+                                        </div>
+                                        <div style="display:flex; gap:12px; align-items:center; background: #f8fafc; padding: 8px 16px; border-radius: 12px; border: 1px solid #f1f5f9;">
+                                            <div style="display:flex; align-items:center; gap:8px;">
+                                                <input type="number" id="new-group-weight" placeholder="Value" style="width:80px; padding:10px; border-radius:8px; border:1px solid #cbd5e1; font-weight: 700; font-size: 14px; text-align: center;">
+                                                <select id="new-group-unit" style="padding:10px; border-radius:8px; border:1px solid #cbd5e1; font-weight: 600; font-size: 13px; background: white; cursor: pointer;">
+                                                    <option value="Kg">Kg</option>
+                                                    <option value="Gm">Gm</option>
+                                                </select>
+                                            </div>
+                                            <div style="width: 1px; height: 30px; background: #e2e8f0;"></div>
+                                            <button type="button" class="btn btn-primary" onclick="addNewWeightGroup()" style="padding:10px 24px; font-size:13px; background:var(--primary); border:none; border-radius:8px; font-weight:800; display:flex; align-items:center; gap:8px; box-shadow: 0 4px 10px rgba(45, 106, 79, 0.2);">
+                                                <i class="ph ph-plus-circle" style="font-size:18px;"></i> CREATE GROUP
                                             </button>
                                         </div>
                                     </div>
