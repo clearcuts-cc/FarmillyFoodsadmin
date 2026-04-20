@@ -39,13 +39,50 @@ document.addEventListener('DOMContentLoaded', () => {
         // Handle routing based on URL
         handleRouting();
 
-        // Supabase is ready — if logged in, load dashboard
-        if (localStorage.getItem('adminLoggedIn') === 'true') {
-            showAdminContent();
-        }
+        // Check current session
+        checkSession();
+
+        // Listen for auth changes
+        supabaseClient.auth.onAuthStateChange((event, session) => {
+            console.log('🔔 Auth Event:', event);
+            if (session) {
+                localStorage.setItem('adminLoggedIn', 'true');
+                showAdminContent();
+                // If it was a redirect from magic link, clear URL
+                if (event === 'SIGNED_IN') {
+                    const next = sessionStorage.getItem('redirectAfterLogin') || 'dashboard';
+                    sessionStorage.removeItem('redirectAfterLogin');
+                    navigateTo(next);
+                }
+            } else {
+                localStorage.removeItem('adminLoggedIn');
+                showLoginScreen();
+            }
+        });
     }
     bootAdmin();
 });
+
+async function checkSession() {
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    if (session) {
+        localStorage.setItem('adminLoggedIn', 'true');
+        showAdminContent();
+    } else {
+        localStorage.removeItem('adminLoggedIn');
+        showLoginScreen();
+    }
+}
+
+function showLoginScreen() {
+    const loginScreen = document.getElementById('login-screen');
+    const sidebar = document.getElementById('sidebar');
+    const mainWrapper = document.getElementById('main-wrapper');
+    if (loginScreen) loginScreen.style.display = 'flex';
+    if (sidebar) sidebar.style.display = 'none';
+    if (mainWrapper) mainWrapper.style.display = 'none';
+    document.body.classList.add('show-login');
+}
 
 
 function showAdminContent() {
@@ -71,33 +108,57 @@ function showAdminContent() {
     }
 }
 
-function handleLogin() {
+async function handleMagicLinkLogin() {
     const emailInput = document.getElementById('login-email');
-    const passInput = document.getElementById('login-password');
     const errorEl = document.getElementById('login-error-msg');
+    const successEl = document.getElementById('login-success-msg');
+    const btn = document.getElementById('send-link-btn');
 
     const email = emailInput ? emailInput.value.trim() : '';
-    const pass = passInput ? passInput.value : '';
+    if (!email) return;
 
-    if (email === 'admin@farmmily.com' && pass === 'Admin#123') {
-        localStorage.setItem('adminLoggedIn', 'true');
-        showAdminContent();
-        
-        const next = sessionStorage.getItem('redirectAfterLogin');
-        if (next) {
-            sessionStorage.removeItem('redirectAfterLogin');
-            navigateTo(next);
-        } else {
-            navigateTo('dashboard');
+    try {
+        if(btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<i class="ph ph-circle-notch spinner-white"></i> Sending...';
         }
         
-        if (typeof showToast === 'function') showToast('Welcome back, Admin!');
-    } else {
+        const { error } = await supabaseClient.auth.signInWithOtp({
+            email: email,
+            options: {
+                emailRedirectTo: window.location.origin + window.location.pathname,
+            }
+        });
+
+        if (error) throw error;
+
+        if (successEl) successEl.style.display = 'block';
+        if (errorEl) errorEl.style.display = 'none';
+        
+        if(btn) {
+            btn.innerHTML = '<i class="ph ph-check"></i> Link Sent!';
+            btn.style.background = '#166534';
+        }
+        
+        showToast('Magic link sent to your email!', 'success');
+    } catch (err) {
+        console.error('❌ Login Error:', err);
         if (errorEl) {
             errorEl.style.display = 'block';
-            setTimeout(() => { errorEl.style.display = 'none'; }, 3000);
+            errorEl.innerHTML = `<i class="ph ph-warning-circle"></i> ${err.message || 'Verification failed'}`;
+        }
+        if(btn) {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="ph ph-paper-plane-tilt"></i> Resend Magic Link';
         }
     }
+}
+
+async function handleLogout() {
+    await supabaseClient.auth.signOut();
+    localStorage.removeItem('adminLoggedIn');
+    showLoginScreen();
+    showToast('Logged out successfully');
 }
 
 function handleLogout() {
