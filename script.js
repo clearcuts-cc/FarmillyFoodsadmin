@@ -611,17 +611,75 @@ function getProductVariantQuantities(product) {
         return parseVariantQuantities(product.variant_quantities);
     }
 
+    // Default for Single Products if no variants set
+    if (product?.product_type === 'standard' || !product?.product_type) {
+        // Return nothing if we want to rely on the unit-only display
+        return [];
+    }
+
     return [];
 }
 
 function buildVariantPreviewHtml(basePricePerKg, quantities) {
+    const unitSelect = document.querySelector('#product-form select[name="unit"]');
+    const unit = unitSelect ? unitSelect.value : 'kg';
+
     if (!quantities.length) {
-        return `<span style="font-size:0.8rem; color:var(--text-muted);">Add quantities like 3,5,7,10,15</span>`;
+        return `<span style="font-size:0.8rem; color:var(--text-muted);">Add quantities (separated by commas)</span>`;
     }
 
     return quantities.map(qty => `
-        <span class="variant-pill">${qty}kg <span>${formatCurrency(calculateVariantPrice(basePricePerKg, qty))}</span></span>
+        <span class="variant-pill">${qty}${unit} <span>${formatCurrency(calculateVariantPrice(basePricePerKg, qty))}</span></span>
     `).join('');
+}
+
+function updateLivePreviews() {
+    const journeyText = document.querySelector('textarea[name="harvest_journey"]')?.value || '';
+    const aboutText = document.querySelector('textarea[name="about_item"]')?.value || '';
+
+    const journeyPreview = document.getElementById('harvest-journey-preview');
+    const aboutPreview = document.getElementById('about-item-preview');
+
+    if (journeyPreview && journeyText) {
+        const lines = journeyText.split('\n').filter(l => l.trim());
+        journeyPreview.innerHTML = `
+            <div class="user-side-preview">
+                <h6 style="color:var(--primary-dark); font-size:11px; margin-bottom:12px; text-transform:uppercase; letter-spacing:1px; text-align:center;">OUR HARVEST JOURNEY</h6>
+                ${lines.map((l, index) => {
+                    const [title, ...rest] = l.split(':');
+                    return `
+                        <div style="display:flex; gap:12px; margin-bottom:16px; align-items:flex-start;">
+                            <span style="background:var(--primary-light); color:var(--primary); width:24px; height:24px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:800; flex-shrink:0;">${index + 1}</span>
+                            <div>
+                                <div style="font-weight:700; color:var(--text-main); font-size:12px; line-height:1.4;">${title.trim()}</div>
+                                <div style="font-size:11px; color:var(--text-muted); line-height:1.5;">${rest.join(':').trim()}</div>
+                            </div>
+                        </div>
+                    `;
+                }).join('')}
+            </div>
+        `;
+    } else if (journeyPreview) journeyPreview.innerHTML = '';
+
+    if (aboutPreview && aboutText) {
+        const lines = aboutText.split('\n').filter(l => l.trim());
+        aboutPreview.innerHTML = `
+            <div class="user-side-preview">
+                <h6 style="color:var(--text-main); font-size:13px; margin-bottom:12px; font-weight:800;">About this item</h6>
+                <ul style="padding:0; margin:0; list-style:none;">
+                    ${lines.map(l => {
+                        const [title, ...rest] = l.split(':');
+                        return `
+                            <li style="font-size:11px; color:var(--text-muted); margin-bottom:8px; line-height:1.5; display:flex; align-items:flex-start; gap:8px;">
+                                <span style="font-size:14px; margin-top:-2px;">•</span>
+                                <div><b style="color:var(--text-main);">${title.trim()}${rest.length ? ':' : ''}</b> ${rest.join(':').trim()}</div>
+                            </li>
+                        `;
+                    }).join('')}
+                </ul>
+            </div>
+        `;
+    } else if (aboutPreview) aboutPreview.innerHTML = '';
 }
 
 function refreshVariantPreview() {
@@ -1197,11 +1255,7 @@ async function renderProducts() {
         }));
         
         if (allProducts.length === 0) {
-            if (products.length > 0) {
-                document.getElementById('products-tbody').innerHTML = `<tr><td colspan="10" style="text-align:center;padding:40px;color:#64748b">All products have been ordered and are now hidden.</td></tr>`;
-            } else {
-                showEmpty('products-tbody');
-            }
+            showEmpty('products-tbody', 'No products found in the database');
         } else {
             buildProductsTable(allProducts);
         }
@@ -1218,15 +1272,25 @@ function buildProductsTable(products) {
         const isOutOfStock = p.in_stock === false;
         const basePrice = getBasePricePerKg(p);
         const variantQuantities = getProductVariantQuantities(p);
+        const unit = p.unit || 'kg';
         
         let variantSummary = '';
         if (p.variants && p.variants.length > 0) {
             variantSummary = p.variants.map(v => `<span class="ap-variant-pill">${v.label} - ${formatCurrency(v.price || calculateVariantPrice(basePrice, v.quantity_kg))}</span>`).join('');
         } else if (variantQuantities.length) {
-            variantSummary = variantQuantities.map(qty => `<span class="ap-variant-pill">${qty}kg - ${formatCurrency(calculateVariantPrice(basePrice, qty))}</span>`).join('');
+            variantSummary = variantQuantities.map(qty => `<span class="ap-variant-pill">${qty}${unit} - ${formatCurrency(calculateVariantPrice(basePrice, qty))}</span>`).join('');
         } else {
-            variantSummary = '<span class="ap-variant-pill" style="opacity:0.6">No variants</span>';
+            // SINGLE PRODUCT FALLBACK: Show 1 unit price
+            variantSummary = `<span class="ap-variant-pill">1 ${unit} - ${formatCurrency(basePrice)}</span>`;
         }
+
+        const typeLabels = {
+            'standard': 'Single Product',
+            'multi': 'Multi Product',
+            'custom_box': 'Custom Box',
+            'corporate_box': 'Corporate Box'
+        };
+        const typeLabel = typeLabels[p.product_type] || (p.product_type || 'Single Product').replace(/_/g, ' ');
 
         const reviewCount = p.review_count ?? p.rating_count ?? 0;
         const averageRating = Number(p.avg_rating ?? p.rating ?? 0);
@@ -1247,9 +1311,9 @@ function buildProductsTable(products) {
                         </div>
                         <div style="display:flex; gap:6px; margin-top:6px; flex-wrap: wrap;">
                             <span class="ap-badge-sm" style="background:#e0f2fe; color:#0369a1">${cat?.name || 'Uncategorized'}</span>
-                            <span class="ap-badge-sm" style="background:#f3f4f6; color:#4b5563">${(p.product_type || 'standard').replace(/_/g, ' ')}</span>
+                            <span class="ap-badge-sm" style="background:#f3f4f6; color:#4b5563">${typeLabel}</span>
                             <span class="ap-badge-sm" style="background:#fef3c7; color:#92400e; font-weight:700;">PRIO: ${p.priority ?? 100}</span>
-                            ${variantQuantities.map(qty => `<span class="ap-badge-sm" style="background:#ecfdf5; color:#065f46; font-weight:600;">${qty}${qty.toString().match(/[a-zA-Z]/) ? '' : 'kg'}</span>`).join('')}
+                            ${variantQuantities.length ? variantQuantities.map(qty => `<span class="ap-badge-sm" style="background:#ecfdf5; color:#065f46; font-weight:600;">${qty}${qty.toString().match(/[a-zA-Z]/) ? '' : unit}</span>`).join('') : `<span class="ap-badge-sm" style="background:#f3f4f6; color:#64748b; font-weight:600;">1 ${unit}</span>`}
                         </div>
                     </div>
                 </div>
@@ -1258,7 +1322,7 @@ function buildProductsTable(products) {
             <!-- Pricing & Variants -->
             <td>
                 <div style="font-weight:700; color:var(--text-main); margin-bottom:4px">
-                    ${formatCurrency(basePrice)}<span style="font-size:0.75rem; color:#64748b; font-weight:500;">/kg base</span>
+                    ${formatCurrency(basePrice)}<span style="font-size:0.75rem; color:#64748b; font-weight:500;">/${unit} base</span>
                 </div>
                 <div style="display:flex; flex-wrap:wrap; gap:4px; max-width: 250px;">
                     ${variantSummary}
@@ -2355,6 +2419,12 @@ function resetProductForm() {
     refreshVariantPreview();
 }
 
+function handleUnitChange(unit) {
+    const variantLabel = document.getElementById('variant-quantities-label');
+    if (variantLabel) variantLabel.innerHTML = `Variant Quantities (${unit})`;
+    refreshVariantPreview();
+}
+
 /**
  * Handles switching between product types (Custom Size / Multi Product / etc.)
  * Shows/hides relevant form sections.
@@ -2366,6 +2436,18 @@ function handleProductTypeChange(type) {
     // Hide standard base price section if custom box
     const standardPricing = document.getElementById('standard-pricing-section');
     if (standardPricing) standardPricing.style.display = (type === 'custom_box') ? 'none' : 'block';
+
+    handleUnitChange(document.querySelector('#product-form select[name="unit"]')?.value || 'kg');
+
+    // Intelligent defaults for fresh products (if not editing)
+    if (!editingProductId) {
+        const variantInput = document.querySelector('#product-form input[name="variant_quantities"]');
+        if (variantInput) {
+            if (type === 'standard') variantInput.value = '1';
+            else if (type === 'multi') variantInput.value = '3,5,7,10,15';
+            refreshVariantPreview();
+        }
+    }
 }
 
 function addNewWeightGroup(val, unit) {
@@ -2586,6 +2668,9 @@ async function editProduct(id) {
     form.elements['is_featured'].checked = !!p.is_featured;
     form.elements['show_on_home'].checked = !!p.show_on_home;
     form.elements['show_on_shop'].checked = p.show_on_shop !== false;
+    form.elements['sku'].value = p.sku || '';
+    form.elements['harvest_journey'].value = p.harvest_journey || '';
+    form.elements['about_item'].value = p.about_item || '';
     
     // Star Rating Fields
     form.elements['rating'].value = p.rating || '5.0';
@@ -2634,6 +2719,7 @@ async function editProduct(id) {
     // Trigger product type UI update
     handleProductTypeChange(pType);
     refreshVariantPreview();
+    updateLivePreviews();
 }
 
 async function saveProduct(event) {
