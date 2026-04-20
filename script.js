@@ -2139,15 +2139,20 @@ function resetProductForm() {
     // Reset Crate Builder Slots
     const container = document.getElementById('crate-slots-container');
     if (container) {
+        // Keep only first 4 slots, remove the rest
         const slots = container.querySelectorAll('.crate-slot');
         slots.forEach((slot, i) => {
-            const idInput = slot.querySelector('.custom-var-id');
-            const sizeInput = slot.querySelector('.custom-var-size');
-            const priceInput = slot.querySelector('.custom-var-price');
-            
-            if (idInput) idInput.value = '';
-            if (sizeInput) sizeInput.value = (i < 2) ? '3Kg' : '5Kg';
-            if (priceInput) priceInput.value = '';
+            if (i >= 4) {
+                slot.remove();
+            } else {
+                const idInput = slot.querySelector('.custom-var-id');
+                const sizeInput = slot.querySelector('.custom-var-size');
+                const priceInput = slot.querySelector('.custom-var-price');
+                
+                if (idInput) idInput.value = '';
+                if (sizeInput) sizeInput.value = (i < 2) ? '3Kg' : '5Kg';
+                if (priceInput) priceInput.value = '';
+            }
         });
     }
 
