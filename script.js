@@ -108,19 +108,22 @@ function showAdminContent() {
     }
 }
 
-async function handleMagicLinkLogin() {
+async function handleLogin() {
     const emailInput = document.getElementById('login-email');
+    const passInput = document.getElementById('login-password');
     const errorEl = document.getElementById('login-error-msg');
-    const successEl = document.getElementById('login-success-msg');
-    const btn = document.getElementById('send-link-btn');
+    const btn = document.getElementById('login-btn');
 
     const email = emailInput ? emailInput.value.trim().toLowerCase() : '';
-    if (!email) return;
+    const password = passInput ? passInput.value : '';
 
+    if (!email || !password) return;
+
+    // Strict Restriction: Only allow the official admin email
     if (email !== 'info.farmmily@gmail.com') {
         if (errorEl) {
             errorEl.style.display = 'block';
-            errorEl.innerHTML = '<i class="ph ph-warning-circle"></i> Unauthorized admin email address.';
+            errorEl.innerHTML = '<i class="ph ph-warning-circle"></i> Unauthorized admin access.';
         }
         return;
     }
@@ -128,32 +131,26 @@ async function handleMagicLinkLogin() {
     try {
         if(btn) {
             btn.disabled = true;
-            btn.innerHTML = '<i class="ph ph-circle-notch spinner-white"></i> Sending Link...';
+            btn.innerHTML = '<i class="ph ph-circle-notch spinner-white"></i> Authenticating...';
         }
         
-        const { error } = await supabaseClient.auth.signInWithOtp({
+        const { data, error } = await supabaseClient.auth.signInWithPassword({
             email: email,
-            options: {
-                emailRedirectTo: window.location.origin + window.location.pathname,
-            }
+            password: password
         });
 
         if (error) throw error;
 
-        if (successEl) successEl.style.display = 'block';
-        if (errorEl) errorEl.style.display = 'none';
+        localStorage.setItem('adminLoggedIn', 'true');
+        showAdminContent();
+        navigateTo('dashboard');
+        showToast('Welcome back, Admin!', 'success');
         
-        if(btn) {
-            btn.innerHTML = '<i class="ph ph-check"></i> Link Sent!';
-            btn.style.background = '#166534';
-        }
-        
-        showToast('Secure link sent to your email!', 'success');
     } catch (err) {
         console.error('❌ Login Error:', err);
         if (errorEl) {
             errorEl.style.display = 'block';
-            errorEl.innerHTML = `<i class="ph ph-warning-circle"></i> ${err.message || 'Verification failed'}`;
+            errorEl.innerHTML = `<i class="ph ph-warning-circle"></i> ${err.message || 'Invalid credentials'}`;
         }
         if(btn) {
             btn.disabled = false;
