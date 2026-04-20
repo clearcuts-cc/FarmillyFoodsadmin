@@ -2873,6 +2873,7 @@ async function handleFileUpload(input, targetInputNameOrId, previewId) {
                     });
 
                     showToast('✅ Image updated! All variants synced.', 'success');
+                    renderProducts(); // Refresh the table instantly
                 } catch(err) {
                     console.error('Image save error:', err);
                     showToast('Image loaded but not saved — click Save Product to apply.', 'warning');
