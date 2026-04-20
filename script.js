@@ -474,26 +474,42 @@ async function upsertVariantsWithFallback(payload) {
 
 async function saveProductVariants(productId, rawQuantities, pricing = {}) {
     const quantities = parseVariantQuantities(rawQuantities);
-    const labels = quantities.map(qty => `${qty}kg`);
+    const labels = quantities.map(qty => (typeof qty === 'object') ? qty.label : `${qty}kg`);
     const basePricePerKg = parseFloat(pricing.basePricePerKg || 0);
     const compareAtPerKg = parseFloat(pricing.compareAtPerKg || 0);
-    const payload = quantities.map((qty, index) => ({
-        product_id: productId,
-        label: `${qty}kg`,
-        quantity_kg: qty,
-        is_default: index === 0,
-        price: calculateVariantPrice(basePricePerKg, qty),
-        original_price: compareAtPerKg > 0 ? calculateVariantPrice(compareAtPerKg, qty) : null,
-        base_price: basePricePerKg,
-        base_price_per_kg: basePricePerKg,
-        compare_at_price_per_kg: compareAtPerKg > 0 ? compareAtPerKg : null,
-        updated_at: new Date().toISOString()
-    }));
+
+    const payload = quantities.map((v, index) => {
+        // If v is a custom object (for Custom Size types)
+        if (typeof v === 'object' && v !== null) {
+            return {
+                product_id: productId,
+                label: v.label,
+                quantity_kg: parseFloat(v.label) || 0,
+                is_default: index === 0,
+                price: parseFloat(v.price) || 0,
+                sku: v.sku || null,
+                updated_at: new Date().toISOString()
+            };
+        }
+
+        // Standard auto-calculation
+        const qtyNum = parseFloat(v) || 0;
+        return {
+            product_id: productId,
+            label: `${qtyNum}kg`,
+            quantity_kg: qtyNum,
+            is_default: index === 0,
+            price: calculateVariantPrice(basePricePerKg, qtyNum),
+            compare_at_price: compareAtPerKg > 0 ? calculateVariantPrice(compareAtPerKg, qtyNum) : null,
+            updated_at: new Date().toISOString()
+        };
+    });
 
     if (payload.length > 0) {
         await upsertVariantsWithFallback(payload);
     }
 
+    // Cleaning up stale variants
     const { data: existingVariants, error: fetchError } = await supabaseClient
         .from('product_variants')
         .select('id, label')
@@ -505,11 +521,7 @@ async function saveProductVariants(productId, rawQuantities, pricing = {}) {
         .map(variant => variant.id);
 
     if (staleIds.length > 0) {
-        const { error: deleteError } = await supabaseClient
-            .from('product_variants')
-            .delete()
-            .in('id', staleIds);
-        if (deleteError) throw deleteError;
+        await supabaseClient.from('product_variants').delete().in('id', staleIds);
     }
 }
 
@@ -2118,6 +2130,24 @@ function resetProductForm() {
     const btn = document.getElementById('save-product-btn');
     if (btn) btn.innerHTML = '<i class="ph ph-floppy-disk"></i> Save Product';
 
+    // Reset Custom Size Lists
+    const leftList = document.getElementById('custom-size-left-list');
+    const rightList = document.getElementById('custom-size-right-list');
+    if (leftList) leftList.innerHTML = `
+        <input type="text" class="form-control custom-var-size" placeholder="e.g. 3Kg" value="3Kg">
+        <input type="text" class="form-control custom-var-size" placeholder="">
+    `;
+    if (rightList) rightList.innerHTML = `
+        <div style="display:flex; gap:12px;" class="custom-var-row">
+            <input type="text" class="form-control custom-var-id" placeholder="ID (e.g. BANG-3)">
+            <input type="number" class="form-control custom-var-price" placeholder="Price (₹)">
+        </div>
+        <div style="display:flex; gap:12px;" class="custom-var-row">
+            <input type="text" class="form-control custom-var-id" placeholder="">
+            <input type="number" class="form-control custom-var-price" placeholder="">
+        </div>
+    `;
+
     if (form?.elements['product_type']) {
         form.elements['product_type'].value = 'standard';
         handleProductTypeChange('standard');
@@ -2304,6 +2334,38 @@ async function editProduct(id) {
     if (form.elements['about_item']) form.elements['about_item'].value = p.about_item || '';
     if (form.elements['sku']) form.elements['sku'].value = p.sku || '';
 
+    // Load Custom Size Variants if applicable
+    if (pType === 'custom_box') {
+        const { data: variants } = await supabaseClient.from('product_variants').select('*').eq('product_id', id).order('id', { ascending: true });
+        
+        const leftList = document.getElementById('custom-size-left-list');
+        const rightList = document.getElementById('custom-size-right-list');
+        
+        if (leftList && rightList && variants && variants.length > 0) {
+            leftList.innerHTML = '';
+            rightList.innerHTML = '';
+            variants.forEach(v => {
+                // Left
+                const lInput = document.createElement('input');
+                lInput.type = 'text';
+                lInput.className = 'form-control custom-var-size';
+                lInput.value = v.label;
+                leftList.appendChild(lInput);
+
+                // Right
+                const rDiv = document.createElement('div');
+                rDiv.style.display = 'flex';
+                rDiv.style.gap = '12px';
+                rDiv.className = 'custom-var-row';
+                rDiv.innerHTML = `
+                    <input type="text" class="form-control custom-var-id" placeholder="ID" value="${v.sku || ''}">
+                    <input type="number" class="form-control custom-var-price" placeholder="Price" value="${v.price || ''}">
+                `;
+                rightList.appendChild(rDiv);
+            });
+        }
+    }
+
     const preview = document.getElementById('img-preview');
     if(preview) preview.src = p.image_url || 'https://placehold.co/200x200/f1f5f9/94a3b8?text=Upload';
 
@@ -2318,19 +2380,44 @@ async function editProduct(id) {
 async function saveProduct(event) {
     event.preventDefault();
     const form = document.getElementById('product-form');
-    const variantQuantities = parseVariantQuantities(form.elements['variant_quantities']?.value || '3,5,7,10,15');
-    const defaultVariantQty = variantQuantities[0] || 1;
-    const basePricePerKg = parseFloat(form.elements['base_price_per_kg']?.value || 0);
-    const compareAtPerKg = parseFloat(form.elements['compare_at_price_per_kg']?.value || 0);
-
     const productType = form.elements['product_type']?.value || 'standard';
-    if (productType !== 'multi' && (!basePricePerKg || basePricePerKg <= 0)) {
-        showToast('Please enter a valid Base Price Per Kg', 'warning');
-        return;
+
+    let variantQuantities = [];
+    let customVariantPayload = null;
+    let basePricePerKg = 0;
+    let compareAtPerKg = 0;
+
+    if (productType === 'custom_box') {
+        const sizeInputs = document.querySelectorAll('.custom-var-size');
+        const idInputs = document.querySelectorAll('.custom-var-id');
+        const priceInputs = document.querySelectorAll('.custom-var-price');
+        
+        customVariantPayload = [];
+        sizeInputs.forEach((input, i) => {
+            const label = input.value.trim();
+            if (label) {
+                customVariantPayload.push({
+                    label: label,
+                    sku: idInputs[i]?.value?.trim() || null,
+                    price: parseFloat(priceInputs[i]?.value) || 0
+                });
+                variantQuantities.push(label);
+            }
+        });
+    } else {
+        variantQuantities = parseVariantQuantities(form.elements['variant_quantities']?.value || '3,5,7,10,15');
+        basePricePerKg = parseFloat(form.elements['base_price_per_kg']?.value || 0);
+        compareAtPerKg = parseFloat(form.elements['compare_at_price_per_kg']?.value || 0);
+
+        if (productType !== 'multi' && (!basePricePerKg || basePricePerKg <= 0)) {
+            showToast('Please enter a valid Base Price Per Kg', 'warning');
+            return;
+        }
     }
 
-    const defaultPrice    = calculateVariantPrice(basePricePerKg, defaultVariantQty);
-    const defaultOldPrice = compareAtPerKg > 0 ? calculateVariantPrice(compareAtPerKg, defaultVariantQty) : null;
+    const defaultVariantQty = parseFloat(variantQuantities[0]) || 1;
+    const defaultPrice    = customVariantPayload ? customVariantPayload[0].price : calculateVariantPrice(basePricePerKg, defaultVariantQty);
+    const defaultOldPrice = (customVariantPayload || compareAtPerKg <= 0) ? null : calculateVariantPrice(compareAtPerKg, defaultVariantQty);
 
     const obj = {
         name:                    form.elements['name'].value.trim(),
@@ -2356,7 +2443,6 @@ async function saveProduct(event) {
         show_on_shop:            form.elements['show_on_shop'].checked,
         rating:                  parseFloat(form.elements['rating'].value) || 5.0,
         review_count:            parseInt(form.elements['review_count'].value) || 0,
-        // New Figma fields
         harvest_journey:         form.elements['harvest_journey']?.value || null,
         about_item:              form.elements['about_item']?.value || null,
         sku:                     form.elements['sku']?.value?.trim() || null,
@@ -2372,7 +2458,9 @@ async function saveProduct(event) {
         if (error) throw error;
 
         const productId = data[0].id;
-        await saveProductVariants(productId, form.elements['variant_quantities'].value, {
+        
+        // Pass the appropriate data to saveProductVariants
+        await saveProductVariants(productId, customVariantPayload || obj.variant_quantities, {
             basePricePerKg,
             compareAtPerKg
         });
