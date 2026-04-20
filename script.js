@@ -2065,16 +2065,31 @@ function resetProductForm() {
     const form = document.getElementById('product-form');
     if (form) form.reset();
 
+    // Reset main image preview
     const preview = document.getElementById('img-preview');
-    if (preview) preview.src = 'https://placehold.co/100';
+    if (preview) preview.src = 'https://placehold.co/200x200/f1f5f9/94a3b8?text=Upload';
+
+    // Reset extra image slots
+    ['img-preview-2', 'img-preview-3'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) { el.src = ''; el.style.display = 'none'; }
+        const slot = el?.closest('.ap-img-slot');
+        if (slot) {
+            const placeholder = slot.querySelector('.ap-img-placeholder');
+            if (placeholder) placeholder.style.display = 'flex';
+        }
+    });
 
     const title = document.getElementById('pm-title');
     if (title) title.innerText = 'Add New Product';
 
     const btn = document.getElementById('save-product-btn');
-    if (btn) btn.innerText = 'Save Product';
+    if (btn) btn.innerHTML = '<i class="ph ph-floppy-disk"></i> Save Product';
 
-    if (form?.elements['product_type']) form.elements['product_type'].value = 'standard';
+    if (form?.elements['product_type']) {
+        form.elements['product_type'].value = 'standard';
+        handleProductTypeChange('standard');
+    }
     if (form?.elements['priority']) form.elements['priority'].value = '100';
     if (form?.elements['variant_quantities']) form.elements['variant_quantities'].value = '3,5,7,10,15';
     if (form?.elements['show_on_shop']) form.elements['show_on_shop'].checked = true;
@@ -2084,6 +2099,125 @@ function resetProductForm() {
     if (form?.elements['review_count']) form.elements['review_count'].value = '0';
     
     refreshVariantPreview();
+}
+
+/**
+ * Handles switching between product types (Custom Size / Multi Product / etc.)
+ * Shows/hides relevant form sections.
+ */
+function handleProductTypeChange(type) {
+    const variantSection = document.getElementById('section-custom-size');
+    if (!variantSection) return;
+
+    // For all non-custom types we still show variant/price section (standard needs pricing)
+    // For 'multi' we show it too — just re-label it if needed
+    variantSection.style.display = 'block';
+    
+    // Adjust required attribute on base_price_per_kg
+    const bpInput = document.querySelector('#product-form input[name="base_price_per_kg"]');
+    const scInput = document.querySelector('#product-form input[name="stock_count"]');
+    
+    if (type === 'multi') {
+        // For multi-type products, marking fields optional makes sense since multi-products
+        // can be composed of other products; keep but not required
+        if (bpInput) bpInput.required = false;
+        if (scInput) scInput.required = false;
+    } else {
+        if (bpInput) bpInput.required = true;
+        if (scInput) scInput.required = true;
+    }
+
+    refreshVariantPreview();
+}
+
+/**
+ * Handles uploading extra (2nd and 3rd) product images to the slot preview.
+ */
+function handleExtraImageUpload(inputEl, previewId) {
+    const file = inputEl.files[0];
+    if (!file) return;
+    
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        const preview = document.getElementById(previewId);
+        if (!preview) return;
+        preview.src = e.target.result;
+        preview.style.display = 'block';
+        
+        // Hide placeholder icon if visible
+        const slot = preview.closest('.ap-img-slot');
+        if (slot) {
+            const placeholder = slot.querySelector('.ap-img-placeholder');
+            if (placeholder) placeholder.style.display = 'none';
+        }
+    };
+    reader.readAsDataURL(file);
+}
+
+/**
+ * AUTO-SKU GENERATOR
+ * ─────────────────────────────────────────────────────────────────────────────
+ * Rules:
+ *  1. Extract the "base name" from the typed product name by taking the first
+ *     meaningful word (ignoring sizes like "3kg", "5kg", "500g", "1L" etc.)
+ *     and uppercasing its first 4 letters → abbreviation.
+ *
+ *  2. Search allProducts for any product whose name starts with the same base
+ *     word (case-insensitive). If found and it already has a SKU, return that
+ *     same SKU → variants of the same product share one SKU.
+ *
+ *  3. If no existing match, find the highest existing numeric suffix for this
+ *     abbreviation and return the next number, e.g. "BANG-001".
+ *
+ * Examples:
+ *   "Banganapalli 3 Kg"  → base="banganapalli" → abbr="BANG"
+ *   existing "Banganapalli 5Kg" already has SKU "BANG-001"
+ *   → returns "BANG-001"   (same family)
+ *
+ *   "Alphonso"           → base="alphonso" → abbr="ALPH"
+ *   no existing product  → returns "ALPH-001"
+ */
+function generateProductSku(name) {
+    if (!name || name.trim().length < 2) return '';
+
+    // Strip weight/size tokens from the name to find the real base name
+    const sizePattern = /\b(\d+\s*(kg|g|ml|l|pcs|pc|gm|gms|litre|liter))\b/gi;
+    const baseName = name.replace(sizePattern, '').trim();
+
+    if (!baseName) return '';
+
+    // Get first meaningful word
+    const firstWord = baseName.split(/\s+/)[0].replace(/[^a-zA-Z]/g, '');
+    if (!firstWord || firstWord.length < 2) return '';
+
+    const abbr = firstWord.substring(0, 4).toUpperCase();
+
+    // Search existing products for same family
+    const existingMatch = allProducts.find(p => {
+        if (!p.name) return false;
+        const pBaseName = p.name.replace(sizePattern, '').trim();
+        const pFirst = pBaseName.split(/\s+/)[0].replace(/[^a-zA-Z]/g, '').toUpperCase();
+        return pFirst === firstWord.toUpperCase();
+    });
+
+    // If a matching product already has a SKU, reuse it (same product family)
+    if (existingMatch && existingMatch.sku) {
+        return existingMatch.sku;
+    }
+
+    // Otherwise find the highest existing number for this abbreviation prefix
+    const existingNumbers = allProducts
+        .filter(p => p.sku && p.sku.startsWith(abbr + '-'))
+        .map(p => {
+            const parts = p.sku.split('-');
+            return parseInt(parts[parts.length - 1]) || 0;
+        });
+
+    const nextNum = existingNumbers.length > 0
+        ? Math.max(...existingNumbers) + 1
+        : 1;
+
+    return `${abbr}-${String(nextNum).padStart(3, '0')}`;
 }
 
 async function editProduct(id) {
@@ -2101,7 +2235,8 @@ async function editProduct(id) {
     form.elements['name'].value = p.name || '';
     form.elements['category_id'].value = p.category_id || '';
     form.elements['badge'].value = p.badge || '';
-    form.elements['product_type'].value = p.product_type || 'standard';
+    const pType = p.product_type || 'standard';
+    form.elements['product_type'].value = pType;
     form.elements['slug'].value = p.slug || '';
     form.elements['description'].value = p.description || '';
     form.elements['image_url'].value = p.image_url || '';
@@ -2120,11 +2255,19 @@ async function editProduct(id) {
     form.elements['rating'].value = p.rating || '5.0';
     form.elements['review_count'].value = p.review_count || '0';
 
+    // New Figma fields
+    if (form.elements['harvest_journey']) form.elements['harvest_journey'].value = p.harvest_journey || '';
+    if (form.elements['about_item']) form.elements['about_item'].value = p.about_item || '';
+    if (form.elements['sku']) form.elements['sku'].value = p.sku || '';
+
     const preview = document.getElementById('img-preview');
-    if(preview) preview.src = p.image_url || 'https://placehold.co/100';
+    if(preview) preview.src = p.image_url || 'https://placehold.co/200x200/f1f5f9/94a3b8?text=Upload';
 
     document.getElementById('pm-title').innerText = 'Edit Product: ' + p.name;
-    document.getElementById('save-product-btn').innerText = 'Update Product';
+    document.getElementById('save-product-btn').innerHTML = '<i class="ph ph-floppy-disk"></i> Update Product';
+    
+    // Trigger product type UI update
+    handleProductTypeChange(pType);
     refreshVariantPreview();
 }
 
@@ -2136,7 +2279,8 @@ async function saveProduct(event) {
     const basePricePerKg = parseFloat(form.elements['base_price_per_kg']?.value || 0);
     const compareAtPerKg = parseFloat(form.elements['compare_at_price_per_kg']?.value || 0);
 
-    if (!basePricePerKg || basePricePerKg <= 0) {
+    const productType = form.elements['product_type']?.value || 'standard';
+    if (productType !== 'multi' && (!basePricePerKg || basePricePerKg <= 0)) {
         showToast('Please enter a valid Base Price Per Kg', 'warning');
         return;
     }
@@ -2148,7 +2292,7 @@ async function saveProduct(event) {
         name:                    form.elements['name'].value.trim(),
         category_id:             parseInt(form.elements['category_id'].value) || null,
         badge:                   form.elements['badge']?.value || null,
-        product_type:            form.elements['product_type']?.value || 'standard',
+        product_type:            productType,
         slug:                    form.elements['slug'].value.trim(),
         description:             form.elements['description']?.value || null,
         image_url:               form.elements['image_url']?.value || null,
@@ -2168,6 +2312,10 @@ async function saveProduct(event) {
         show_on_shop:            form.elements['show_on_shop'].checked,
         rating:                  parseFloat(form.elements['rating'].value) || 5.0,
         review_count:            parseInt(form.elements['review_count'].value) || 0,
+        // New Figma fields
+        harvest_journey:         form.elements['harvest_journey']?.value || null,
+        about_item:              form.elements['about_item']?.value || null,
+        sku:                     form.elements['sku']?.value?.trim() || null,
         updated_at:              new Date().toISOString()
     };
 
@@ -2189,7 +2337,9 @@ async function saveProduct(event) {
         
         if (obj.category_id === 10) {
             const varietyName = obj.name.split(' ')[0];
-            await syncVarietyPrices(varietyName, basePricePerKg, compareAtPerKg);
+            await syncVarietyPrices(varietyName, basePricePerKg, compareAtPerKg, obj.image_url);
+        } else {
+            await syncSameNamedProducts(obj.name, obj.image_url);
         }
 
         showToast(editingProductId ? 'Product Updated! 🥭' : 'New Product Added! 🥭');
@@ -2250,14 +2400,30 @@ document.addEventListener('DOMContentLoaded', () => {
     const pnInput = document.getElementById('product-name-input');
     if(pnInput) {
         pnInput.addEventListener('input', (e) => {
+            const nameVal = e.target.value;
+
+            // Auto-generate slug
             const slugInput = document.querySelector('#product-form input[name="slug"]');
             if(slugInput) {
-                slugInput.value = e.target.value
+                slugInput.value = nameVal
                     .toLowerCase()
                     .trim()
                     .replace(/[^\w\s-]/g, '')
                     .replace(/[\s_-]+/g, '-')
                     .replace(/^-+|-+$/g, '');
+            }
+
+            // Auto-generate SKU (only if not editing and field is empty or was auto-set)
+            const skuInput = document.querySelector('#product-form input[name="sku"]');
+            if (skuInput && !editingProductId) {
+                const generatedSku = generateProductSku(nameVal);
+                if (generatedSku && skuInput.value !== generatedSku) {
+                    skuInput.value = generatedSku;
+                    // Flash green to show it was auto-filled
+                    skuInput.classList.remove('sku-autofilled');
+                    void skuInput.offsetWidth; // reflow to restart animation
+                    skuInput.classList.add('sku-autofilled');
+                }
             }
         });
     }
@@ -3130,7 +3296,7 @@ setupRealtime();
 loadCategoryOptions(); 
 
 
-async function syncVarietyPrices(varietyName, basePrice, compareAt) {
+async function syncVarietyPrices(varietyName, basePrice, compareAt, imageUrl) {
     console.log(`Syncing prices for variety: ${varietyName} -> ₹${basePrice}/kg`);
     try {
         const { data: cousins, error } = await supabaseClient
@@ -3155,6 +3321,7 @@ async function syncVarietyPrices(varietyName, basePrice, compareAt) {
                 compare_at_price_per_kg: compareAt || null,
                 price: newPrice,
                 original_price: newOldPrice,
+                image_url: imageUrl,
                 updated_at: new Date().toISOString()
             };
             
@@ -3169,6 +3336,20 @@ async function syncVarietyPrices(varietyName, basePrice, compareAt) {
         }
     } catch (err) {
         console.error(`Variety sync failed:`, err);
+    }
+}
+
+async function syncSameNamedProducts(name, imageUrl) {
+    if (!name || !imageUrl) return;
+    console.log(`Syncing images for all products named: ${name}`);
+    try {
+        const { error } = await supabaseClient
+            .from('products')
+            .update({ image_url: imageUrl, updated_at: new Date().toISOString() })
+            .eq('name', name);
+        if (error) throw error;
+    } catch (err) {
+        console.error("Same-named product sync failed:", err);
     }
 }
 

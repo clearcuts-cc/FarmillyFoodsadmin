@@ -1062,3 +1062,276 @@ body.show-login .login-container { display: flex; animation: fadeIn 0.4s ease; }
     .table-container { border-radius: var(--radius-md); }
     th, td { padding: 12px 16px; }
 }
+
+/* =========================================================================
+   ADD PRODUCT PAGE — FIGMA REDESIGN
+   ========================================================================= */
+
+/* Container — clean white card */
+.ap-container {
+    background: var(--surface);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-md);
+    border: 1px solid rgba(226, 232, 240, 0.6);
+    padding: 32px;
+}
+
+/* Header bar inside the card */
+.ap-header {
+    padding-bottom: 20px;
+    border-bottom: 1px solid var(--border-color);
+    margin-bottom: 28px;
+}
+
+.ap-title {
+    font-size: 1.35rem;
+    font-weight: 800;
+    color: var(--text-main);
+    letter-spacing: -0.3px;
+}
+
+/* Two-column grid */
+.ap-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 40px;
+    align-items: start;
+}
+
+/* Two-column row inside each column */
+.ap-row-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+}
+
+/* Section divider label */
+.ap-section-label {
+    font-size: 0.75rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--primary);
+    padding: 10px 0 8px;
+    border-top: 2px solid #e2faf0;
+    margin: 8px 0 16px;
+}
+
+/* Textarea override for add product */
+.ap-textarea {
+    min-height: 110px;
+    resize: vertical;
+}
+
+/* ---- Image Slots ---- */
+.ap-image-slots {
+    display: flex;
+    gap: 12px;
+}
+
+.ap-img-slot {
+    position: relative;
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    border: 2px dashed #cbd5e1;
+    cursor: pointer;
+    transition: var(--transition);
+    background: #f8fafc;
+    flex: 1;
+    aspect-ratio: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.ap-img-slot:hover {
+    border-color: var(--primary-light);
+    background: #f0faf5;
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+}
+
+.ap-img-slot--primary {
+    flex: 2;
+    border-style: solid;
+    border-color: var(--primary-light);
+    background: #f0faf5;
+}
+
+.ap-img-slot img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.ap-img-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(45, 106, 79, 0.6);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    color: white;
+    font-size: 0.75rem;
+    font-weight: 700;
+    opacity: 0;
+    transition: var(--transition);
+}
+.ap-img-slot:hover .ap-img-overlay { opacity: 1; }
+.ap-img-overlay i { font-size: 1.6rem; }
+
+.ap-img-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #cbd5e1;
+    font-size: 2rem;
+    width: 100%;
+    height: 100%;
+    min-height: 80px;
+}
+
+/* Upload button */
+.ap-upload-btn {
+    background: white;
+    border: 1.5px solid var(--border-color);
+    color: var(--text-main);
+    padding: 10px 16px;
+    white-space: nowrap;
+    font-weight: 600;
+}
+.ap-upload-btn:hover {
+    border-color: var(--primary);
+    color: var(--primary);
+    background: #f0faf5;
+}
+
+/* Harvest Journey label */
+.ap-journey-label {
+    color: var(--primary-dark) !important;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    letter-spacing: 0.5px;
+}
+
+/* ---- Toggle Chips Bar ---- */
+.ap-toggles-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    padding: 16px;
+    background: #f8fafc;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-color);
+    margin-top: 8px;
+    margin-bottom: 20px;
+}
+
+.ap-toggle-chip {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--text-main);
+}
+
+/* ---- Form Footer ---- */
+.ap-form-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    padding-top: 24px;
+    margin-top: 24px;
+    border-top: 1px solid var(--border-color);
+}
+
+.ap-save-btn {
+    padding: 12px 28px;
+    font-size: 1rem;
+    min-width: 160px;
+}
+
+/* ---- Responsive ---- */
+@media (max-width: 1024px) {
+    .ap-grid { grid-template-columns: 1fr; gap: 24px; }
+    .ap-row-2 { grid-template-columns: 1fr 1fr; }
+}
+
+@media (max-width: 640px) {
+    .ap-container { padding: 20px; }
+    .ap-row-2 { grid-template-columns: 1fr; }
+    .ap-image-slots { flex-wrap: wrap; }
+    .ap-img-slot--primary { flex: 1 0 100%; aspect-ratio: 16/9; }
+}
+
+/* ---- SKU Auto Badge & Hint ---- */
+.ap-badge-auto {
+    display: inline-flex;
+    align-items: center;
+    background: linear-gradient(135deg, var(--primary-light), var(--primary));
+    color: white;
+    font-size: 0.65rem;
+    font-weight: 800;
+    padding: 2px 8px;
+    border-radius: 999px;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+}
+
+.ap-sku-hint {
+    display: block;
+    margin-top: 6px;
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    font-weight: 500;
+}
+
+/* Read-only SKU display wrapper */
+.ap-sku-display {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.ap-sku-display > i {
+    position: absolute;
+    left: 12px;
+    color: var(--primary);
+    font-size: 1.1rem;
+    font-weight: 700;
+    pointer-events: none;
+}
+
+.ap-sku-field {
+    padding-left: 32px !important;
+    background: #f0faf5 !important;
+    border-color: #bbf7d0 !important;
+    color: var(--primary-dark) !important;
+    font-family: 'Courier New', monospace !important;
+    font-weight: 800 !important;
+    letter-spacing: 1px !important;
+    cursor: default !important;
+    caret-color: transparent;
+}
+
+.ap-sku-field::placeholder {
+    color: #94a3b8;
+    font-weight: 400;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    letter-spacing: 0;
+}
+
+/* Flash animation when SKU is auto-filled */
+@keyframes skuAutoFill {
+    0%   { background: #d1fae5 !important; border-color: var(--primary-light) !important; box-shadow: 0 0 0 3px rgba(82,183,136,0.25); }
+    100% { background: #f0faf5 !important; border-color: #bbf7d0 !important; box-shadow: none; }
+}
+
+.sku-autofilled {
+    animation: skuAutoFill 0.8s ease-out forwards;
+}

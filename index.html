@@ -251,79 +251,181 @@
 
             <!-- Add Product Page -->
             <div id="page-add-product" class="page">
-                <div class="card">
-                    <div class="table-header" style="padding: 0 0 20px 0;">
-                        <span class="table-title" id="pm-title">Add New Product</span>
+                <div class="ap-container">
+                    <div class="ap-header">
+                        <span class="ap-title" id="pm-title">Add New Product</span>
                     </div>
                     <form id="product-form" onsubmit="saveProduct(event)">
-                        <div class="grid-2-col">
-                            <div>
-                                <div class="form-group">
-                                    <label class="form-label">Product Name</label>
-                                    <input type="text" name="name" id="product-name-input" class="form-control" required placeholder="e.g. Raw Forest Honey">
+                        <div class="ap-grid">
+                            <!-- LEFT COLUMN -->
+                            <div class="ap-left">
+
+                                <!-- Row 1: Product Id + Product Name -->
+                                <div class="ap-row-2">
+                                    <div class="form-group">
+                                        <label class="form-label" style="display:flex; align-items:center; gap:8px;">
+                                            Product ID
+                                            <span class="ap-badge-auto">Auto-generated</span>
+                                        </label>
+                                        <div class="ap-sku-display">
+                                            <i class="ph ph-hash"></i>
+                                            <input type="text" name="sku" id="sku-input" class="form-control ap-sku-field" readonly placeholder="Type product name →" tabindex="-1">
+                                        </div>
+                                        <small class="ap-sku-hint">Auto-filled · same name products share one ID</small>
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label">Product Name <span style="color:#ef4444">*</span></label>
+                                        <input type="text" name="name" id="product-name-input" class="form-control" required placeholder="e.g. Banganapalli Mango">
+                                    </div>
                                 </div>
+
+                                <!-- Product Description -->
                                 <div class="form-group">
-                                    <label class="form-label">Category</label>
-                                    <select name="category_id" class="form-control" required>
-                                        <option value="">Select Category</option>
-                                    </select>
+                                    <label class="form-label">Product Description</label>
+                                    <textarea name="description" class="form-control ap-textarea" rows="5" placeholder="Brief product description..."></textarea>
                                 </div>
-                                <div class="form-group">
-                                    <label class="form-label">Badge (e.g. Best Seller)</label>
-                                    <select name="badge" class="form-control">
-                                        <option value="">No Badge</option>
-                                        <option value="New Harvest">New Harvest</option>
-                                        <option value="Best Seller">Best Seller</option>
-                                        <option value="Limited Stock">Limited Stock</option>
-                                    </select>
+
+                                <!-- Category + Product Type row -->
+                                <div class="ap-row-2">
+                                    <div class="form-group">
+                                        <label class="form-label">Select Category</label>
+                                        <select name="category_id" class="form-control" required>
+                                            <option value="">Select Category</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label">Product Type</label>
+                                        <select name="product_type" class="form-control" id="product-type-select" onchange="handleProductTypeChange(this.value)">
+                                            <option value="standard">Single Product</option>
+                                            <option value="custom_box">Custom Size</option>
+                                            <option value="multi">Multi Product</option>
+                                            <option value="corporate_box">Corporate Gifting</option>
+                                        </select>
+                                    </div>
                                 </div>
-                                <div class="form-group">
-                                    <label class="form-label">Product Type</label>
-                                    <select name="product_type" class="form-control">
-                                        <option value="standard">Standard Product</option>
-                                        <option value="custom_box">Custom Box</option>
-                                        <option value="corporate_box">Corporate / Gifting Box</option>
-                                    </select>
+
+                                <!-- Unit + Badge row -->
+                                <div class="ap-row-2">
+                                    <div class="form-group">
+                                        <label class="form-label">Unit</label>
+                                        <select name="unit" class="form-control">
+                                            <option value="kg">Kilo Gram</option>
+                                            <option value="g">Gram</option>
+                                            <option value="L">Litre</option>
+                                            <option value="ml">Millilitre</option>
+                                            <option value="pcs">Pieces</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label">Badge</label>
+                                        <select name="badge" class="form-control">
+                                            <option value="">No Badge</option>
+                                            <option value="New Harvest">New Harvest</option>
+                                            <option value="Best Seller">Best Seller</option>
+                                            <option value="Limited Stock">Limited Stock</option>
+                                        </select>
+                                    </div>
                                 </div>
+
+                                <!-- Slug (hidden but needed for save) -->
                                 <div class="form-group">
-                                    <label class="form-label">Slug</label>
+                                    <label class="form-label">URL Slug <span style="color:#ef4444">*</span></label>
                                     <input type="text" name="slug" class="form-control" required placeholder="e.g. raw-honey-500g">
                                 </div>
-                                <div class="form-group">
-                                    <label class="form-label">Description</label>
-                                    <textarea name="description" class="form-control"></textarea>
+
+                                <!-- ===== CUSTOM SIZE SECTION ===== -->
+                                <div id="section-custom-size">
+                                    <div class="ap-section-label">Custom Size Options</div>
+                                    <div class="form-group">
+                                        <label class="form-label">Variant Quantities (kg)</label>
+                                        <input type="text" name="variant_quantities" class="form-control" value="3,5,7,10,15" placeholder="e.g. 3,5,7,10,15">
+                                        <small style="display:block; margin-top:6px; color:var(--text-muted);">Prices are auto-calculated from base price per kg.</small>
+                                        <div id="variant-preview" class="variant-preview-list" style="margin-top:10px;"></div>
+                                    </div>
+                                    <div class="ap-row-2">
+                                        <div class="form-group">
+                                            <label class="form-label">Base Price / Kg ₹ <span style="color:#ef4444">*</span></label>
+                                            <input type="number" name="base_price_per_kg" class="form-control" step="0.01" min="0">
+                                        </div>
+                                        <div class="form-group">
+                                            <label class="form-label">Compare At / Kg ₹</label>
+                                            <input type="number" name="compare_at_price_per_kg" class="form-control" step="0.01" min="0">
+                                        </div>
+                                    </div>
+                                    <div class="ap-row-2">
+                                        <div class="form-group">
+                                            <label class="form-label">Stock Count</label>
+                                            <input type="number" name="stock_count" class="form-control" value="0" min="0">
+                                        </div>
+                                        <div class="form-group">
+                                            <label class="form-label">Display Priority</label>
+                                            <input type="number" name="priority" class="form-control" value="100" min="1">
+                                        </div>
+                                    </div>
                                 </div>
-                                <div class="form-group">
-                                    <label class="form-label">Variant Quantities (kg)</label>
-                                    <input type="text" name="variant_quantities" class="form-control" value="3,5,7,10,15" placeholder="e.g. 3,5,7,10,15">
-                                    <small style="display:block; margin-top:6px; color:var(--text-muted);">Prices are auto-calculated from the base price per kg.</small>
-                                    <div id="variant-preview" class="variant-preview-list" style="margin-top:10px;"></div>
+
+                                <!-- Toggles -->
+                                <div class="ap-toggles-bar">
+                                    <div class="ap-toggle-chip">
+                                        <label class="switch"><input type="checkbox" name="in_stock" checked><span class="slider"></span></label>
+                                        <span>In Stock</span>
+                                    </div>
+                                    <div class="ap-toggle-chip">
+                                        <label class="switch"><input type="checkbox" name="is_active" checked><span class="slider"></span></label>
+                                        <span>Visible</span>
+                                    </div>
+                                    <div class="ap-toggle-chip">
+                                        <label class="switch"><input type="checkbox" name="is_featured"><span class="slider"></span></label>
+                                        <span>Featured</span>
+                                    </div>
+                                    <div class="ap-toggle-chip">
+                                        <label class="switch"><input type="checkbox" name="show_on_home"><span class="slider"></span></label>
+                                        <span>Home Page</span>
+                                    </div>
+                                    <div class="ap-toggle-chip">
+                                        <label class="switch"><input type="checkbox" name="show_on_shop" checked><span class="slider"></span></label>
+                                        <span>Shop Page</span>
+                                    </div>
                                 </div>
+
                             </div>
-                            <div>
+
+                            <!-- RIGHT COLUMN -->
+                            <div class="ap-right">
+
+                                <!-- Product Image -->
                                 <div class="form-group">
                                     <label class="form-label">Product Image</label>
-                                    <div style="display:flex; gap:10px; align-items:center; margin-bottom:10px">
+                                    <div style="display:flex; gap:8px; align-items:center; margin-bottom:12px;">
                                         <input type="url" name="image_url" class="form-control" style="flex:1" placeholder="Paste URL or Upload ->">
-                                        <button type="button" class="btn btn-outline" onclick="document.getElementById('prod-file').click()">Upload</button>
+                                        <button type="button" class="btn ap-upload-btn" onclick="document.getElementById('prod-file').click()">
+                                            <i class="ph ph-upload-simple"></i> Upload
+                                        </button>
                                         <input type="file" id="prod-file" style="display:none" accept="image/*" onchange="handleFileUpload(this, 'image_url', 'img-preview')">
                                     </div>
-                                    <img id="img-preview" src="https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=200" style="width:160px; height:160px; border-radius:12px; object-fit:contain; background:#f8fafc; border:1px dashed #cbd5e1; padding:5px;">
-                                </div>
-                                <div class="grid-2-col" style="gap:10px">
-                                    <div class="form-group"><label class="form-label">Base Price Per Kg ₹</label><input type="number" name="base_price_per_kg" class="form-control" required step="0.01" min="0"></div>
-                                    <div class="form-group"><label class="form-label">Compare At Price Per Kg ₹</label><input type="number" name="compare_at_price_per_kg" class="form-control" step="0.01" min="0"></div>
-                                </div>
-                                <div class="grid-2-col" style="gap:10px">
-                                    <div class="form-group"><label class="form-label">Stock Count</label><input type="number" name="stock_count" class="form-control" required></div>
-                                    <div class="form-group">
-                                        <label class="form-label">Display Priority</label>
-                                        <input type="number" name="priority" class="form-control" value="100" min="1">
+                                    <!-- Multi-image slots -->
+                                    <div class="ap-image-slots">
+                                        <div class="ap-img-slot ap-img-slot--primary" onclick="document.getElementById('prod-file').click()" title="Main image (click to change)">
+                                            <img id="img-preview" src="https://placehold.co/200x200/f1f5f9/94a3b8?text=Upload" alt="Main image">
+                                            <div class="ap-img-overlay"><i class="ph ph-camera-plus"></i><span>Main</span></div>
+                                        </div>
+                                        <div class="ap-img-slot" onclick="document.getElementById('prod-file-2').click()" title="Extra image 2">
+                                            <img id="img-preview-2" src="" alt="" style="display:none">
+                                            <div class="ap-img-placeholder"><i class="ph ph-image"></i></div>
+                                            <input type="file" id="prod-file-2" style="display:none" accept="image/*" onchange="handleExtraImageUpload(this, 'img-preview-2')">
+                                        </div>
+                                        <div class="ap-img-slot" onclick="document.getElementById('prod-file-3').click()" title="Extra image 3">
+                                            <img id="img-preview-3" src="" alt="" style="display:none">
+                                            <div class="ap-img-placeholder"><i class="ph ph-image"></i></div>
+                                            <input type="file" id="prod-file-3" style="display:none" accept="image/*" onchange="handleExtraImageUpload(this, 'img-preview-3')">
+                                        </div>
                                     </div>
                                 </div>
-                                <div class="grid-2-col" style="gap:10px">
+
+                                <!-- Star Rating + Review Count -->
+                                <div class="ap-row-2">
                                     <div class="form-group">
-                                        <label class="form-label">Rating (0 - 5)</label>
+                                        <label class="form-label">Star Rating (0 – 5)</label>
                                         <input type="number" name="rating" class="form-control" step="0.1" min="0" max="5" value="5.0">
                                     </div>
                                     <div class="form-group">
@@ -331,40 +433,34 @@
                                         <input type="number" name="review_count" class="form-control" value="0" min="0">
                                     </div>
                                 </div>
-                                <div class="grid-2-col" style="gap:10px">
-                                    <div class="form-group">
-                                        <label class="form-label">In Stock</label>
-                                        <label class="switch"><input type="checkbox" name="in_stock" checked><span class="slider"></span></label>
-                                    </div>
-                                    <div class="form-group">
-                                        <label class="switch"><input type="checkbox" name="is_active" checked><span class="slider"></span></label>
-                                        <label class="form-label" style="display:inline; margin-left:8px;">Visible</label>
-                                    </div>
-                                    <div class="form-group">
-                                        <label class="switch"><input type="checkbox" name="is_featured"><span class="slider"></span></label>
-                                        <label class="form-label" style="display:inline; margin-left:8px;">Featured Product</label>
-                                    </div>
+
+                                <!-- OUR HARVEST JOURNEY -->
+                                <div class="form-group">
+                                    <label class="form-label ap-journey-label">
+                                        <i class="ph ph-leaf"></i> OUR HARVEST JOURNEY
+                                    </label>
+                                    <textarea name="harvest_journey" class="form-control ap-textarea" rows="4" placeholder="Tell the story of where this product comes from, how it's grown and harvested..."></textarea>
                                 </div>
-                                <div class="grid-2-col" style="gap:10px">
-                                    <div class="form-group">
-                                        <label class="switch"><input type="checkbox" name="show_on_home"><span class="slider"></span></label>
-                                        <label class="form-label" style="display:inline; margin-left:8px;">Show On Home Page</label>
-                                    </div>
-                                    <div class="form-group">
-                                        <label class="switch"><input type="checkbox" name="show_on_shop" checked><span class="slider"></span></label>
-                                        <label class="form-label" style="display:inline; margin-left:8px;">Show On Shop Page</label>
-                                    </div>
+
+                                <!-- About This Item -->
+                                <div class="form-group">
+                                    <label class="form-label">About This Item</label>
+                                    <textarea name="about_item" class="form-control ap-textarea" rows="4" placeholder="Key highlights, health benefits, packaging details..."></textarea>
                                 </div>
+
                             </div>
                         </div>
-                        <div style="margin-top: 20px; display:flex; justify-content: flex-end; gap: 10px;">
+
+                        <!-- Form Actions -->
+                        <div class="ap-form-footer">
                             <button type="button" class="btn btn-outline" onclick="resetProductForm(); navigateTo('all-products')">Cancel</button>
-                            <button type="submit" class="btn btn-primary" id="save-product-btn">Save Product</button>
+                            <button type="submit" class="btn btn-primary ap-save-btn" id="save-product-btn">
+                                <i class="ph ph-floppy-disk"></i> Save Product
+                            </button>
                         </div>
                     </form>
                 </div>
             </div>
-
             <!-- Categories Page -->
             <div id="page-categories" class="page">
                 <div class="table-container">
