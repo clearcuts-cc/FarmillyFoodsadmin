@@ -2147,10 +2147,12 @@ function resetProductForm() {
             } else {
                 const idInput = slot.querySelector('.custom-var-id');
                 const sizeInput = slot.querySelector('.custom-var-size');
+                const unitSelect = slot.querySelector('.custom-var-unit');
                 const priceInput = slot.querySelector('.custom-var-price');
                 
                 if (idInput) idInput.value = '';
-                if (sizeInput) sizeInput.value = (i < 2) ? '3Kg' : '5Kg';
+                if (sizeInput) sizeInput.value = (i < 2) ? '3' : '5';
+                if (unitSelect) unitSelect.value = 'Kg';
                 if (priceInput) priceInput.value = '';
             }
         });
@@ -2195,8 +2197,12 @@ function addCrateSlot() {
         <span style="font-size:10px; font-weight:800; color:#94a3b8; display:block; margin-bottom:6px; text-transform:uppercase;">Variety ${slotCount}</span>
         <input type="text" class="form-control custom-var-id" placeholder="ID" style="margin-bottom:8px; font-size:12px; padding:6px;">
         <div style="display:flex; gap:6px;">
-            <input type="text" class="form-control custom-var-size" placeholder="Size" style="flex:1; font-size:11px; padding:4px;">
-            <input type="number" class="form-control custom-var-price" placeholder="Price" style="flex:1; font-size:11px; padding:4px;">
+            <input type="number" class="form-control custom-var-size" placeholder="Val" style="width:50px; font-size:11px; padding:4px;">
+            <select class="form-control custom-var-unit" style="flex:1; font-size:11px; padding:4px; height:auto;">
+                <option value="Kg">Kg</option>
+                <option value="Gm">Gm</option>
+            </select>
+            <input type="number" class="form-control custom-var-price" placeholder="Price" style="flex:1.5; font-size:11px; padding:4px;">
         </div>
     `;
     container.appendChild(slot);
@@ -2364,7 +2370,17 @@ async function editProduct(id) {
                     const priceInput = slots[i].querySelector('.custom-var-price');
                     
                     if (idInput) idInput.value = v.sku || '';
-                    if (sizeInput) sizeInput.value = v.label || '';
+                    if (sizeInput) {
+                        // Parse label like "3Kg" or "500Gm"
+                        const match = (v.label || '').match(/^(\d+)(.*)$/);
+                        if (match) {
+                            sizeInput.value = match[1];
+                            const unitSelect = slots[i].querySelector('.custom-var-unit');
+                            if (unitSelect) unitSelect.value = match[2] || 'Kg';
+                        } else {
+                            sizeInput.value = v.label || '';
+                        }
+                    }
                     if (priceInput) priceInput.value = v.price || '';
                 }
             });
@@ -2398,9 +2414,14 @@ async function saveProduct(event) {
         const idInputs = container?.querySelectorAll('.custom-var-id') || [];
         const priceInputs = container?.querySelectorAll('.custom-var-price') || [];
         
+        const unitInputs = container?.querySelectorAll('.custom-var-unit') || [];
+        
         customVariantPayload = [];
         sizeInputs.forEach((input, i) => {
-            const label = input.value.trim();
+            const val = input.value.trim();
+            const unit = unitInputs[i]?.value || 'Kg';
+            const label = val ? `${val}${unit}` : '';
+            
             if (label) {
                 customVariantPayload.push({
                     label: label,
