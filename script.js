@@ -2573,31 +2573,41 @@ if(reviewForm) {
 }
 
 // --- Image Upload & Compression ---
-function handleFileUpload(input, targetInputNameOrId, previewId) {
+async function handleFileUpload(input, targetInputNameOrId, previewId) {
     const file = input.files[0];
     if(!file) return;
-    
+
+    const preview = document.getElementById(previewId);
+
+    // Show uploading state on the image preview slot
+    if(preview) {
+        const slot = preview.closest('.ap-img-slot');
+        if(slot) {
+            slot.classList.add('ap-img-uploading');
+            slot.querySelector('.ap-img-overlay')?.remove();
+            const uploading = document.createElement('div');
+            uploading.className = 'ap-img-overlay ap-img-uploading-overlay';
+            uploading.innerHTML = '<i class="ph ph-circle-notch spinner"></i><span>Uploading...</span>';
+            uploading.style.cssText = 'opacity:1; background:rgba(45,106,79,0.75);';
+            slot.appendChild(uploading);
+        }
+    }
+
     const reader = new FileReader();
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
         const img = new Image();
-        img.onload = () => {
+        img.onload = async () => {
             // Compress using Canvas
             const canvas = document.createElement('canvas');
-            const MAX_WIDTH = 600;
-            const MAX_HEIGHT = 600;
+            const MAX_WIDTH = 800;
+            const MAX_HEIGHT = 800;
             let width = img.width;
             let height = img.height;
 
             if (width > height) {
-                if (width > MAX_WIDTH) {
-                    height *= MAX_WIDTH / width;
-                    width = MAX_WIDTH;
-                }
+                if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; }
             } else {
-                if (height > MAX_HEIGHT) {
-                    width *= MAX_HEIGHT / height;
-                    height = MAX_HEIGHT;
-                }
+                if (height > MAX_HEIGHT) { width *= MAX_HEIGHT / height; height = MAX_HEIGHT; }
             }
 
             canvas.width = width;
@@ -2605,21 +2615,58 @@ function handleFileUpload(input, targetInputNameOrId, previewId) {
             const ctx = canvas.getContext('2d');
             ctx.drawImage(img, 0, 0, width, height);
 
-            // Get compressed Base64
-            const dataUrl = canvas.toDataURL('image/jpeg', 0.8); // 80% quality
-            
-            // Update inputs
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.82);
+
+            // Update the hidden URL input field
             const target = document.querySelector(`input[name="${targetInputNameOrId}"]`) || document.getElementById(targetInputNameOrId);
             if(target) {
                 target.value = dataUrl;
-                // Dispatch input event to trigger any listeners (like the preview one)
                 target.dispatchEvent(new Event('input'));
             }
-            
-            const preview = document.getElementById(previewId);
-            if(preview) preview.src = dataUrl;
-            
-            showToast("Image compressed and loaded 🚀");
+
+            // Update preview
+            if(preview) {
+                preview.src = dataUrl;
+                preview.style.display = 'block';
+                // Remove uploading overlay, restore hover overlay
+                const slot = preview.closest('.ap-img-slot');
+                if(slot) {
+                    slot.classList.remove('ap-img-uploading');
+                    const uploadingOverlay = slot.querySelector('.ap-img-uploading-overlay');
+                    if(uploadingOverlay) uploadingOverlay.remove();
+                }
+            }
+
+            // ─── AUTO-SAVE to DB if editing an existing product ──────────────
+            if(editingProductId && targetInputNameOrId === 'image_url') {
+                try {
+                    showToast('Saving image to product...', 'info');
+
+                    const { error } = await supabaseClient
+                        .from('products')
+                        .update({ image_url: dataUrl, updated_at: new Date().toISOString() })
+                        .eq('id', editingProductId);
+
+                    if(error) throw error;
+
+                    // Sync with other products that have the same name (variants)
+                    const currentProduct = allProducts.find(p => p.id == editingProductId);
+                    if(currentProduct) {
+                        await syncSameNamedProducts(currentProduct.name, dataUrl);
+                    }
+
+                    // Update local cache
+                    const cached = allProducts.find(p => p.id == editingProductId);
+                    if(cached) cached.image_url = dataUrl;
+
+                    showToast('✅ Image updated! User side will reflect shortly.', 'success');
+                } catch(err) {
+                    console.error('Image save error:', err);
+                    showToast('Image loaded but not saved — click Save Product to apply.', 'warning');
+                }
+            } else {
+                showToast('Image ready 🖼️ — click Save Product to apply.');
+            }
         };
         img.src = e.target.result;
     };

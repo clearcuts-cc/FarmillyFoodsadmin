@@ -1335,3 +1335,25 @@ body.show-login .login-container { display: flex; animation: fadeIn 0.4s ease; }
 .sku-autofilled {
     animation: skuAutoFill 0.8s ease-out forwards;
 }
+
+/* ---- Image slot uploading state ---- */
+.ap-img-slot.ap-img-uploading {
+    pointer-events: none;
+}
+
+.ap-img-uploading-overlay {
+    display: flex !important;
+    opacity: 1 !important;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.ap-img-uploading-overlay i {
+    animation: spin 0.8s linear infinite;
+    font-size: 1.8rem;
+}
+
+.ap-img-uploading-overlay span {
+    font-size: 0.75rem;
+    font-weight: 700;
+}
