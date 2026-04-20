@@ -119,15 +119,6 @@ async function handleLogin() {
 
     if (!email || !password) return;
 
-    // Optional: Restrict to specific admin email if requested
-    if (email !== 'info.farmmily@gmail.com') {
-        if (errorEl) {
-            errorEl.style.display = 'block';
-            errorEl.innerHTML = '<i class="ph ph-warning-circle"></i> Unauthorized email address.';
-        }
-        return;
-    }
-
     try {
         if(btn) {
             btn.disabled = true;
