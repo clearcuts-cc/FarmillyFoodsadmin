@@ -114,8 +114,16 @@ async function handleMagicLinkLogin() {
     const successEl = document.getElementById('login-success-msg');
     const btn = document.getElementById('send-link-btn');
 
-    const email = emailInput ? emailInput.value.trim() : '';
+    const email = emailInput ? emailInput.value.trim().toLowerCase() : '';
     if (!email) return;
+
+    if (email !== 'info.farmmily@gmail.com') {
+        if (errorEl) {
+            errorEl.style.display = 'block';
+            errorEl.innerHTML = '<i class="ph ph-warning-circle"></i> Unauthorized email address.';
+        }
+        return;
+    }
 
     try {
         if(btn) {
