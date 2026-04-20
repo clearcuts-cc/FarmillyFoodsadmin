@@ -2194,11 +2194,13 @@ function addNewWeightGroup(val, unit) {
     groupDiv.className = 'size-group-section';
     groupDiv.style.cssText = 'background:#f8fafc; padding:12px; border-radius:12px; border:1px dashed #cbd5e1;';
     groupDiv.innerHTML = `
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-            <h4 style="font-size:12px; color:#475569; display:flex; align-items:center; gap:6px; margin:0;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; padding-bottom:8px; border-bottom:1px solid #e2e8f0;">
+            <h4 style="font-size:12px; color:#1e293b; display:flex; align-items:center; gap:6px; margin:0; font-weight:800;">
                 <i class="ph ph-package" style="color:#2d6a4f"></i> ${val}${unit} Variety List
             </h4>
-            <button type="button" onclick="this.closest('.size-group-section').remove()" style="background:none; border:none; color:#ef4444; font-size:16px; cursor:pointer;"><i class="ph ph-trash"></i></button>
+            <button type="button" onclick="confirmDeleteGroup(this)" style="background:#fee2e2; border:none; color:#ef4444; width:24px; height:24px; border-radius:6px; display:flex; align-items:center; justify-content:center; cursor:pointer; transition:all 0.2s;" title="Remove this entire weight category">
+                <i class="ph ph-trash"></i>
+            </button>
         </div>
         <div class="crate-slots-list" style="display:flex; flex-direction:column; gap:10px;"></div>
         <button type="button" class="btn btn-outline" onclick="addCrateSlotToGroup('${groupId}', '${val}', '${unit}')" style="width:100%; margin-top:10px; font-size:11px; padding:5px; border-style:dashed;">+ Add ${val}${unit} Variety</button>
@@ -2213,6 +2215,13 @@ function addNewWeightGroup(val, unit) {
     if (document.getElementById('new-group-weight')) document.getElementById('new-group-weight').value = '';
 }
 
+function confirmDeleteGroup(btn) {
+    if (confirm('Are you sure you want to remove this entire weight category and all its products?')) {
+        btn.closest('.size-group-section').remove();
+        showToast('Weight Group removed', 'info');
+    }
+}
+
 function addCrateSlotToGroup(groupId, val, unit) {
     const list = document.querySelector(`#${groupId} .crate-slots-list`);
     if (!list) return;
@@ -2223,7 +2232,9 @@ function addCrateSlotToGroup(groupId, val, unit) {
     slot.style.cssText = 'background:white; padding:10px; border-radius:8px; border:1px solid #cbd5e1; position:relative;';
     slot.innerHTML = `
         <span style="font-size:10px; font-weight:800; color:#94a3b8; display:block; margin-bottom:6px; text-transform:uppercase;">Variety ${slotCount} (${val}${unit})</span>
-        <button type="button" onclick="this.parentElement.remove()" style="position:absolute; top:8px; right:8px; background:none; border:none; color:#94a3b8; font-size:12px; cursor:pointer;"><i class="ph ph-x"></i></button>
+        <button type="button" onclick="this.parentElement.remove()" style="position:absolute; top:8px; right:8px; background:#f1f5f9; border:none; color:#64748b; width:18px; height:18px; border-radius:4px; display:flex; align-items:center; justify-content:center; cursor:pointer;" title="Remove this variety">
+            <i class="ph ph-x" style="font-size:11px; font-weight:bold;"></i>
+        </button>
         <input type="text" class="form-control custom-var-id" placeholder="Product ID / Name" style="margin-bottom:8px; font-size:12px; padding:6px;">
         <div style="display:flex; gap:6px;">
             <input type="hidden" class="custom-var-size" value="${val}">
