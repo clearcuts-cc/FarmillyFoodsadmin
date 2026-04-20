@@ -2681,10 +2681,10 @@ async function handleFileUpload(input, targetInputNameOrId, previewId) {
 
                     if(error) throw error;
 
-                    // Sync with other products that have the same name (variants)
+                    // Sync with other products that have the same SKU (family variants)
                     const currentProduct = allProducts.find(p => p.id == editingProductId);
-                    if(currentProduct) {
-                        await syncSameNamedProducts(currentProduct.name, dataUrl);
+                    if(currentProduct && currentProduct.sku) {
+                        await syncSameNamedProducts(currentProduct.sku, dataUrl);
                     }
 
                     // Update local cache
@@ -3418,17 +3418,17 @@ async function syncVarietyPrices(varietyName, basePrice, compareAt, imageUrl) {
     }
 }
 
-async function syncSameNamedProducts(name, imageUrl) {
-    if (!name || !imageUrl) return;
-    console.log(`Syncing images for all products named: ${name}`);
+async function syncSameNamedProducts(sku, imageUrl) {
+    if (!sku || !imageUrl) return;
+    console.log(`Syncing images for all products with SKU: ${sku}`);
     try {
         const { error } = await supabaseClient
             .from('products')
             .update({ image_url: imageUrl, updated_at: new Date().toISOString() })
-            .eq('name', name);
+            .eq('sku', sku);
         if (error) throw error;
     } catch (err) {
-        console.error("Same-named product sync failed:", err);
+        console.error("Same-SKU product sync failed:", err);
     }
 }
 
