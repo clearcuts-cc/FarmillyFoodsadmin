@@ -192,33 +192,44 @@ function renderCoupons() {
     if (!list) return;
 
     if (allCoupons.length === 0) {
-        list.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:40px; color:#94a3b8;">No coupons found. Create your first discount!</td></tr>';
+        list.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:60px; color:#94a3b8;"><i class="ph ph-ticket" style="font-size:3rem; display:block; margin-bottom:12px; opacity:0.3;"></i>No coupons found. Create your first discount!</td></tr>';
         return;
     }
 
     list.innerHTML = allCoupons.map(cp => `
-        <tr>
-            <td><span class="badge" style="background:#f1f5f9; color:var(--text-main); font-family:monospace; font-size:0.9rem; border:1px solid #e2e8f0;">${cp.code}</span></td>
-            <td style="text-transform:capitalize; font-size:0.85rem">${cp.discount_type === 'percent' ? 'Percentage' : 'Flat Amount'}</td>
-            <td style="font-weight:700">
-                ${cp.discount_type === 'percent' ? cp.discount_value + '%' : '₹' + cp.discount_value}
-            </td>
-            <td style="font-size:0.85rem">₹${cp.min_order_value || 0}</td>
-            <td style="font-size:0.85rem">
-                <div style="display:flex; align-items:center; gap:8px">
-                    <span style="font-weight:700; color:var(--primary)">${cp.used_count || 0}</span>
-                    <span style="color:#94a3b8">/</span>
-                    <span style="color:#64748b">${cp.max_uses || '∞'}</span>
-                </div>
-            </td>
-            <td>
-                <span class="status-badge ${cp.active ? 'status-paid' : 'status-pending'}">
-                    ${cp.active ? 'Active' : 'Inactive'}
+        <tr style="border-bottom: 1px solid #f1f5f9;">
+            <td style="padding:16px 20px;">
+                <span style="background:var(--primary-light); color:white; padding:6px 12px; border-radius:8px; font-family:monospace; font-weight:800; font-size:13px; letter-spacing:1px; border:1px solid rgba(255,255,255,0.2); box-shadow:0 2px 4px rgba(45, 106, 79, 0.2);">
+                    ${cp.code}
                 </span>
             </td>
-            <td style="text-align:right">
-                <button class="btn btn-outline" onclick="deleteCoupon(${cp.id})" style="padding:6px; color:#ef4444; border-color:#fee2e2;">
-                    <i class="ph ph-trash"></i>
+            <td style="padding:16px 20px;">
+                <div style="font-weight:700; color:var(--text-main); font-size:15px;">
+                    ${cp.discount_type === 'percent' ? cp.discount_value + '% OFF' : '₹' + cp.discount_value + ' OFF'}
+                </div>
+                <div style="font-size:11px; color:#94a3b8; text-transform:uppercase; font-weight:700; margin-top:2px;">
+                    ${cp.discount_type === 'percent' ? 'Percentage Discount' : 'Flat Amount Discount'}
+                </div>
+            </td>
+            <td style="padding:16px 20px;">
+                <div style="font-weight:600; color:#475569;">Min Order: ₹${cp.min_order_value || 0}</div>
+            </td>
+            <td style="padding:16px 20px;">
+                <div style="display:flex; align-items:center; gap:8px;">
+                    <progress value="${cp.used_count || 0}" max="${cp.max_uses || 100}" style="width:60px; height:6px; border-radius:10px; overflow:hidden;"></progress>
+                    <span style="font-size:12px; font-weight:700; color:var(--primary)">${cp.used_count || 0}</span>
+                    <span style="color:#cbd5e1; font-size:10px;">/</span>
+                    <span style="color:#94a3b8; font-size:12px;">${cp.max_uses || '∞'}</span>
+                </div>
+            </td>
+            <td style="padding:16px 20px;">
+                <span class="status-badge ${cp.active ? 'status-paid' : 'status-pending'}" style="font-size:10px; padding:4px 10px;">
+                    ${cp.active ? 'ACTIVE' : 'INACTIVE'}
+                </span>
+            </td>
+            <td style="padding:16px 20px; text-align:right;">
+                <button class="btn btn-outline" onclick="deleteCoupon(${cp.id})" style="padding:8px; width:36px; height:36px; border-radius:10px; color:#ef4444; border-color:#fee2e2; background:#fff;">
+                    <i class="ph ph-trash" style="font-size:18px;"></i>
                 </button>
             </td>
         </tr>

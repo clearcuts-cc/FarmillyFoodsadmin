@@ -515,30 +515,29 @@
             </div>
             <!-- Coupons Page -->
             <div id="page-coupons" class="page">
-                <div class="page-header" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:24px;">
+                <div class="page-header" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:32px;">
                     <div>
-                        <h2 style="margin:0;">Discount Coupons</h2>
-                        <p style="color:var(--text-muted); margin:4px 0 0 0; font-size:0.9rem;">Create and manage promotion codes for your customers</p>
+                        <h2 style="margin:0; font-size:24px; font-weight:800;">Promotional Coupons</h2>
+                        <p style="color:var(--text-muted); margin:4px 0 0 0; font-size:12px;">Boost your sales with custom discount codes and special offers</p>
                     </div>
-                    <button class="btn btn-primary" onclick="openModal('couponModal')">
-                        <i class="ph ph-plus-circle"></i> Create New Coupon
+                    <button class="btn btn-primary" onclick="openModal('couponModal')" style="padding:12px 24px; border-radius:12px; font-weight:700; display:flex; align-items:center; gap:8px; box-shadow: 0 4px 12px rgba(45, 106, 79, 0.2);">
+                        <i class="ph ph-plus-circle" style="font-size:20px;"></i> CREATE COUPON
                     </button>
                 </div>
 
-                <div class="card" style="padding:0; overflow:hidden;">
+                <div class="card" style="padding:0; overflow:hidden; border-radius:16px; box-shadow: var(--shadow-sm);">
                     <table class="table" style="margin:0;">
                         <thead>
-                            <tr>
-                                <th>Code</th>
-                                <th>Type</th>
-                                <th>Value</th>
-                                <th>Min. Order</th>
-                                <th>Usage</th>
-                                <th>Status</th>
-                                <th style="text-align:right">Actions</th>
+                            <tr style="background:#f8fafc;">
+                                <th style="padding:16px 20px; font-size:11px; text-transform:uppercase; color:#64748b; font-weight:800;">Coupon Code</th>
+                                <th style="padding:16px 20px; font-size:11px; text-transform:uppercase; color:#64748b; font-weight:800;">Discount Details</th>
+                                <th style="padding:16px 20px; font-size:11px; text-transform:uppercase; color:#64748b; font-weight:800;">Min. Requirement</th>
+                                <th style="padding:16px 20px; font-size:11px; text-transform:uppercase; color:#64748b; font-weight:800;">Usage Stats</th>
+                                <th style="padding:16px 20px; font-size:11px; text-transform:uppercase; color:#64748b; font-weight:800;">Live Status</th>
+                                <th style="padding:16px 20px; font-size:11px; text-transform:uppercase; color:#64748b; font-weight:800; text-align:right">Management</th>
                             </tr>
                         </thead>
-                        <tbody id="coupons-table-body">
+                        <tbody id="coupons-table-body" style="font-size:14px;">
                             <!-- Populated by JS -->
                         </tbody>
                     </table>
