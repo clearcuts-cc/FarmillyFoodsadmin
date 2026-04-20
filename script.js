@@ -2640,8 +2640,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     `;
                     item.onclick = () => {
                         input.value = p.sku;
-                        const row = input.closest('.custom-var-row');
-                        const priceInput = row?.querySelector('.custom-var-price');
+                        // Support both old list and new crate builder layouts
+                        const parent = input.closest('.crate-slot') || input.closest('.custom-var-row');
+                        const priceInput = parent?.querySelector('.custom-var-price');
                         if(priceInput) priceInput.value = p.base_price || 0;
                         dropdown.remove();
                         showToast(`Selected ${p.name}`, 'info');
