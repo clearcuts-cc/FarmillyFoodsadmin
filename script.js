@@ -26,33 +26,44 @@ let currentModalOrder = null;
 
 // --- Boot: wait for Supabase then load data ---
 document.addEventListener('DOMContentLoaded', () => {
-    console.log('📦 DOMContentLoaded fired');
-    function bootAdmin() {
-        console.log('🔧 bootAdmin: attempting initSupabase...');
-        if (!initSupabase()) {
-            console.log('⏳ Supabase CDN not ready, retrying in 300ms...');
-            setTimeout(bootAdmin, 300);
+    function tryInit() {
+        if (!window.supabase || !window.supabase.createClient) {
+            setTimeout(tryInit, 200);
             return;
         }
-        console.log('✅ bootAdmin: Supabase ready! adminLoggedIn:', localStorage.getItem('adminLoggedIn'));
-        
-        // Handle routing based on URL
-        handleRouting();
 
-        // Check current session
-        checkSession();
+        // Init client with session persistence
+        supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey, {
+            auth: {
+                persistSession: true,
+                autoRefreshToken: true,
+                detectSessionInUrl: false
+            }
+        });
+        console.log('✅ Supabase client ready');
 
-        // Listen for auth changes
+        // ① Restore session on refresh
+        supabaseClient.auth.getSession().then(({ data }) => {
+            if (data.session) {
+                console.log('🔑 Session restored');
+                localStorage.setItem('adminLoggedIn', 'true');
+                showAdminContent();
+                loadDashboardData().then(() => handleRouting());
+            } else {
+                console.log('🔒 No session');
+                localStorage.removeItem('adminLoggedIn');
+                showLoginScreen();
+            }
+        });
+
+        // ② Listen for auth changes
         supabaseClient.auth.onAuthStateChange((event, session) => {
             console.log('🔔 Auth Event:', event);
             if (session) {
                 localStorage.setItem('adminLoggedIn', 'true');
                 showAdminContent();
-                // If it was a redirect from magic link, clear URL
                 if (event === 'SIGNED_IN') {
-                    const next = sessionStorage.getItem('redirectAfterLogin') || 'dashboard';
-                    sessionStorage.removeItem('redirectAfterLogin');
-                    navigateTo(next);
+                    loadDashboardData().then(() => handleRouting());
                 }
             } else {
                 localStorage.removeItem('adminLoggedIn');
@@ -60,8 +71,27 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     }
-    bootAdmin();
+    tryInit();
 });
+
+async function loadDashboardData() {
+    console.log('📦 Pre-fetching dashboard data...');
+    try {
+        const [catRes, prodRes, orderRes] = await Promise.all([
+            supabaseClient.from('categories').select('*'),
+            supabaseClient.from('products').select('*'),
+            supabaseClient.from('orders').select('*').order('created_at', { ascending: false })
+        ]);
+
+        if (catRes.data) allCategories = catRes.data;
+        if (prodRes.data) allProducts = prodRes.data;
+        if (orderRes.data) allOrders = orderRes.data;
+        
+        console.log('✅ Dashboard data ready');
+    } catch (e) {
+        console.error('❌ Data pre-fetch failed:', e);
+    }
+}
 
 async function checkSession() {
     const { data: { session } } = await supabaseClient.auth.getSession();
@@ -272,13 +302,14 @@ async function deleteCoupon(id) {
     }
 }
 
-// --- Navigation Logic ---
 function navigateTo(pageId, push = true) {
+    pageId = (pageId || 'dashboard').toLowerCase();
     console.log(`🚀 Navigating to: ${pageId} (push: ${push})`);
     
     const pageEl = document.getElementById(`page-${pageId}`);
     if (!pageEl) {
-        console.warn(`⚠️ Page not found: ${pageId}`);
+        console.warn(`⚠️ Page not found: ${pageId}. Redirecting to dashboard.`);
+        navigateTo('dashboard', push);
         return;
     }
 
@@ -292,12 +323,14 @@ function navigateTo(pageId, push = true) {
         'categories': 'Categories | Farmmily Admin', 
         'inventory': 'Inventory | Farmmily Admin', 
         'all-orders': 'All Orders | Farmmily Admin',
-        'delivery': 'Delivery & Logistics | Farmmily Admin',
+        'pending': 'Pending Orders | Farmmily Admin', 
+        'shipped': 'Shipped Orders | Farmmily Admin', 
+        'delivered': 'Delivered Orders | Farmmily Admin',
         'customers': 'Customers | Farmmily Admin', 
         'reports': 'Reports | Farmmily Admin', 
-        'coupons': 'Coupons | Farmmily Admin',
         'banners': 'Banners | Farmmily Admin', 
         'reviews': 'Reviews | Farmmily Admin', 
+        'coupons': 'Coupons | Farmmily Admin', 
         'corporate': 'Corporate Orders | Farmmily Admin', 
         'settings': 'Settings | Farmmily Admin'
     };
@@ -305,7 +338,6 @@ function navigateTo(pageId, push = true) {
     document.title = titles[pageId] || 'Farmmily Admin';
     const titleEl = document.getElementById('page-title');
     if (titleEl) titleEl.innerText = titles[pageId]?.split('|')[0].trim() || 'Admin';
-
 
     // Sidebar active state
     document.querySelectorAll('.nav-item, .sub-nav-item').forEach(el => el.classList.remove('active'));
@@ -322,11 +354,8 @@ function navigateTo(pageId, push = true) {
         const sidebar = document.getElementById('sidebar');
         if (sidebar) sidebar.classList.remove('show');
     }
-
-    // URL Synchronization
-    if (push) {
-        syncUrl(pageId);
-    }
+    
+    if (push) syncUrl(pageId);
 
     // Page Specific Refresh
     if (pageId === 'dashboard') renderDashboard();
@@ -334,55 +363,32 @@ function navigateTo(pageId, push = true) {
     if (pageId === 'categories') renderCategories();
     if (pageId === 'inventory') renderInventory();
     if (pageId === 'all-orders') renderOrders();
-    if (pageId === 'delivery') renderDelivery();
+    if (pageId === 'pending') renderOrders('pending');
+    if (pageId === 'shipped') renderOrders('shipped');
+    if (pageId === 'delivered') renderOrders('delivered');
+    if (pageId === 'customers') renderCustomers();
+    if (pageId === 'reports') renderReports();
+    if (pageId === 'banners') renderBanners();
+    if (pageId === 'reviews') renderReviews();
+    if (pageId === 'coupons') loadCoupons();
+    if (pageId === 'corporate') renderCorporateOrders();
+
+    // Scroll to top
+    const contentArea = document.getElementById('content-area');
+    if (contentArea) contentArea.scrollTop = 0;
 }
 
 function syncUrl(pageId) {
-    const currentPath = window.location.pathname;
-    let targetPath = pageId === 'dashboard' ? '/' : '/' + pageId;
-    let newUrl = targetPath;
-    
-    // Support index.html and file protocols
-    if (currentPath.includes('index.html')) {
-        const base = currentPath.substring(0, currentPath.lastIndexOf('/') + 1);
-        newUrl = base + (pageId === 'dashboard' ? 'index.html' : 'index.html?page=' + pageId);
-    } else if (window.location.protocol === 'file:') {
-        newUrl = currentPath + (pageId === 'dashboard' ? '' : '?page=' + pageId);
-    }
-    
-    if (window.location.pathname + window.location.search !== newUrl) {
-        try {
-            window.history.pushState({ pageId: pageId }, '', newUrl);
-        } catch(e) { console.error('Router failed:', e); }
+    const hash = pageId === 'dashboard' ? '' : pageId;
+    if (window.location.hash !== '#' + hash) {
+        window.history.pushState({ pageId: pageId }, '', '#' + hash);
     }
 }
 
 function handleRouting() {
-    console.log('🔗 handleRouting triggered');
-    const urlParams = new URLSearchParams(window.location.search);
-    const pageParam = urlParams.get('page');
-    const path = window.location.pathname;
-
-    let targetPage = 'dashboard';
-
-    if (pageParam) {
-        targetPage = pageParam;
-    } else {
-        // Try to infer from path if using clean URLs
-        const lastPart = path.split('/').pop();
-        if (lastPart && lastPart !== 'index.html' && lastPart !== '') {
-            targetPage = lastPart;
-        }
-    }
-
-    if (localStorage.getItem('adminLoggedIn') === 'true') {
-        navigateTo(targetPage, false);
-    } else {
-        // If not logged in, keep login screen but maybe track where they wanted to go
-        if (targetPage !== 'dashboard') {
-            sessionStorage.setItem('redirectAfterLogin', targetPage);
-        }
-    }
+    const hash = window.location.hash.replace('#', '').toLowerCase();
+    const pageId = hash || 'dashboard';
+    navigateTo(pageId, false);
 }
 
 window.onpopstate = function(event) {
@@ -392,6 +398,9 @@ window.onpopstate = function(event) {
         handleRouting();
     }
 };
+
+// Global Listeners
+window.addEventListener('hashchange', () => handleRouting());
 
 document.querySelectorAll('[data-page]').forEach(el => {
     el.addEventListener('click', (e) => {
@@ -466,6 +475,22 @@ function showConfirm(title, msg, btnText = "Continue", btnColor = "var(--primary
         cancelBtn.addEventListener('click', onCancel);
         modal.classList.add('active');
     });
+}
+
+function showError(elementId, title, message, retryFn = '') {
+    const el = document.getElementById(elementId);
+    if (!el) return;
+    el.innerHTML = `
+        <tr>
+            <td colspan="10" style="text-align:center; padding:50px 20px;">
+                <div style="color:#ef4444; font-size:2rem; margin-bottom:15px;"><i class="ph ph-warning-circle"></i></div>
+                <h3 style="margin-bottom:8px; color:#1e293b;">${title}</h3>
+                <p style="color:#64748b; font-size:0.9rem; margin-bottom:20px;">${message}</p>
+                ${retryFn ? `<button class="btn btn-outline" onclick="${retryFn}" style="padding:8px 20px; font-size:0.85rem;">Try Again</button>` : ''}
+                <div style="margin-top:15px; font-size:0.7rem; color:#94a3b8;">Check if ad-blockers are blocking Supabase connection</div>
+            </td>
+        </tr>
+    `;
 }
 
 function showLoading(elementId) {
@@ -1139,6 +1164,7 @@ async function renderReviews() {
 }
 
 async function renderProducts() {
+    console.log("🛠️ Rendering Products Page...");
     showLoading('products-tbody');
     try {
         const { data: products, error: prodError } = await supabaseClient
@@ -1167,17 +1193,13 @@ async function renderProducts() {
         }));
         
         if (allProducts.length === 0) {
-            if (products.length > 0) {
-                document.getElementById('products-tbody').innerHTML = `<tr><td colspan="10" style="text-align:center;padding:40px;color:#64748b">All products have been ordered and are now hidden.</td></tr>`;
-            } else {
-                showEmpty('products-tbody');
-            }
+            showEmpty('products-tbody', 'No products found in the database');
         } else {
             buildProductsTable(allProducts);
         }
     } catch(err) {
-        showToast("Error loading products: " + (err.message || err), 'error');
-        console.error(err);
+        console.error("❌ Products Render Error:", err);
+        showError('products-tbody', 'Failed to load products', err.message || 'Network error', 'renderProducts()');
     }
 }
 
@@ -1432,48 +1454,66 @@ async function toggleCategoryStatus(id, active) {
 }
 
 async function renderCategories() {
+    console.log("🛠️ Rendering Categories Page...");
+    const tbody = document.getElementById('categories-tbody');
+    if (!tbody) return;
+    
     showLoading('categories-tbody');
+    
     try {
-        const { data: categories, error: catError } = await supabaseClient.from('categories').select('*');
-        const { data: products, error: prodError } = await supabaseClient.from('products').select('id, category_id');
-        
-        if(catError) throw catError;
-        allCategories = categories || [];
-        
-        // Calculate counts
-        const counts = (products || []).reduce((acc, p) => {
+        if (!supabaseClient) throw new Error("Supabase client not initialized");
+
+        // Fetch data in parallel
+        const [catRes, prodRes] = await Promise.all([
+            supabaseClient.from('categories').select('*').order('name'),
+            supabaseClient.from('products').select('id, category_id')
+        ]);
+
+        if (catRes.error) throw catRes.error;
+        const categories = catRes.data || [];
+        allCategories = categories;
+
+        const counts = (prodRes.data || []).reduce((acc, p) => {
             acc[p.category_id] = (acc[p.category_id] || 0) + 1;
             return acc;
         }, {});
 
-        if(categories.length === 0) showEmpty('categories-tbody');
-        else {
-            document.getElementById('categories-tbody').innerHTML = categories.map(c => {
-                const pCount = counts[c.id] || 0;
-                const lowName = (c.name || '').toLowerCase();
-                let iconHtml = '';
-                if (lowName.includes('ghee')) iconHtml = '🍯';
-                else if (lowName.includes('honey')) iconHtml = '🍯';
-                else if (lowName.includes('mango')) iconHtml = '🥭';
-                else if (lowName.includes('spice')) iconHtml = '🌶️';
-                else if (lowName.includes('oil')) iconHtml = '🧴';
-                else if (lowName.includes('beverage')) iconHtml = '🥤';
+        if (categories.length === 0) {
+            showEmpty('categories-tbody', 'No categories found in database.');
+            return;
+        }
 
-                const catImg = c.image_url || '';
+        tbody.innerHTML = categories.map(c => {
+            const pCount = counts[c.id] || 0;
+            const lowName = (c.name || '').toLowerCase();
+            let iconHtml = '';
+            
+            if (lowName.includes('ghee')) iconHtml = '🍯';
+            else if (lowName.includes('honey')) iconHtml = '🍯';
+            else if (lowName.includes('mango')) iconHtml = '🥭';
+            else if (lowName.includes('spice')) iconHtml = '🌶️';
+            else if (lowName.includes('oil')) iconHtml = '🧴';
+            else if (lowName.includes('beverage')) iconHtml = '🥤';
 
-                return `
+            const catImg = c.image_url || '';
+
+            return `
                 <tr>
                     <td>
                         <div style="display:flex; align-items:center; gap:12px;">
-                            ${catImg ? `<img src="${catImg}" class="product-img" style="width:40px; height:40px;">` : `<span style="font-size:1.5rem; width:40px; height:40px; display:flex; align-items:center; justify-content:center; background:#f1f5f9; border-radius:8px;">${iconHtml || '📁'}</span>`}
-                            <strong>${c.name}</strong>
+                            ${catImg ? `<img src="${catImg}" class="product-img" style="width:40px; height:40px; border-radius:8px; object-fit:cover;">` : 
+                            `<span style="font-size:1.5rem; width:40px; height:40px; display:flex; align-items:center; justify-content:center; background:#f1f5f9; border-radius:8px;">${iconHtml || '📁'}</span>`}
+                            <div style="display:flex; flex-direction:column;">
+                                <strong style="color:var(--text-main);">${c.name}</strong>
+                                <span style="font-size:0.7rem; color:var(--text-muted); font-family:monospace;">ID: ${c.id}</span>
+                            </div>
                         </div>
                     </td>
-                    <td>${c.slug}</td>
+                    <td><code style="background:#f1f5f9; padding:2px 6px; border-radius:4px; font-size:0.85rem;">${c.slug}</code></td>
                     <td><span class="badge ${pCount > 0 ? 'info' : ''}" style="text-transform:none"> ${pCount} Products</span></td>
                     <td>
                         <label class="switch">
-                            <input type="checkbox" ${c.active ? 'checked' : ''} onchange="toggleCategoryStatus('${c.id}', this.checked)">
+                            <input type="checkbox" ${c.active !== false ? 'checked' : ''} onchange="toggleCategoryStatus('${c.id}', this.checked)">
                             <span class="slider"></span>
                         </label>
                     </td>
@@ -1483,11 +1523,12 @@ async function renderCategories() {
                         </div>
                     </td>
                 </tr>
-            `}).join('');
-        }
+            `;
+        }).join('');
+        console.log(`✅ Rendered ${categories.length} categories`);
     } catch(err) {
-        showToast("Error loading categories: " + (err.message || err), 'error');
-        console.error(err);
+        console.error("❌ Categories Render Error:", err);
+        showError('categories-tbody', 'Failed to load categories', err.message || 'Network error', 'renderCategories()');
     }
 }
 
