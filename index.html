@@ -446,34 +446,36 @@
                                     </div>
                                 </div>
                                 
-                                <!-- Mixed Crate / 4-Variety Builder (Unified) -->
-                                <div id="section-crate-builder" style="display:none; margin-top: 24px; background:#f8fafc; padding:16px; border-radius:12px; border:1px solid #e2e8f0;">
-                                    <label class="form-label" style="font-weight:800; font-size:14px; color:var(--primary-dark); margin-bottom:12px; display:flex; align-items:center; gap:8px;">
-                                        <i class="ph ph-package"></i> Mixed Crate / 4-Variety Builder
-                                    </label>
-                                    
-                                    <div id="size-groups-container" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap:24px; align-items: start;">
-                                        <!-- Groups will be injected here dynamically -->
-                                    </div>
-
-                                    <div style="margin-top: 32px; padding: 24px; background: #ffffff; border-radius: 16px; border: 1px solid #e2e8f0; box-shadow: var(--shadow-sm); display: flex; flex-direction: column; align-items: center; gap: 16px;">
-                                        <div style="text-align: center;">
-                                            <h5 style="margin: 0 0 4px 0; font-size: 14px; color: var(--text-main); font-weight: 800;">Create Custom Weight Category</h5>
-                                            <p style="margin: 0; font-size: 11px; color: var(--text-muted);">Add sections for 7Kg, 10Kg, or any custom box size</p>
-                                        </div>
-                                        <div style="display:flex; gap:12px; align-items:center; background: #f8fafc; padding: 8px 16px; border-radius: 12px; border: 1px solid #f1f5f9;">
-                                            <div style="display:flex; align-items:center; gap:8px;">
-                                                <input type="number" id="new-group-weight" placeholder="Value" style="width:80px; padding:10px; border-radius:8px; border:1px solid #cbd5e1; font-weight: 700; font-size: 14px; text-align: center;">
-                                                <select id="new-group-unit" style="padding:10px; border-radius:8px; border:1px solid #cbd5e1; font-weight: 600; font-size: 13px; background: white; cursor: pointer;">
-                                                    <option value="Kg">Kg</option>
-                                                    <option value="Gm">Gm</option>
-                                                </select>
+                                <!-- Unified Crate / Variety Builder -->
+                                <div id="section-crate-builder" style="display:none; margin-top:24px;">
+                                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:24px;">
+                                        
+                                        <!-- Left: Box Sizes & Pricing -->
+                                        <div class="card" style="padding:16px; border:1px solid #e2e8f0; background:#fff;">
+                                            <label class="form-label" style="font-weight:800; color:var(--primary-dark); display:flex; align-items:center; gap:8px; margin-bottom:16px;">
+                                                <i class="ph-bold ph-scales"></i> 1. Box Sizes & Pricing
+                                            </label>
+                                            <div id="crate-sizes-list" style="display:flex; flex-direction:column; gap:10px; margin-bottom:20px;">
+                                                <!-- Size rows will be injected here -->
                                             </div>
-                                            <div style="width: 1px; height: 30px; background: #e2e8f0;"></div>
-                                            <button type="button" class="btn btn-primary" onclick="addNewWeightGroup()" style="padding:10px 24px; font-size:13px; background:var(--primary); border:none; border-radius:8px; font-weight:800; display:flex; align-items:center; gap:8px; box-shadow: 0 4px 10px rgba(45, 106, 79, 0.2);">
-                                                <i class="ph ph-plus-circle" style="font-size:18px;"></i> CREATE GROUP
+                                            <button type="button" class="btn btn-outline" onclick="addBoxSizeRow()" style="width:100%; border-style:dashed; font-size:12px;">
+                                                <i class="ph ph-plus-circle"></i> Add New Box Size
                                             </button>
                                         </div>
+
+                                        <!-- Right: Variety Pool -->
+                                        <div class="card" style="padding:16px; border:1px solid #e2e8f0; background:#fff;">
+                                            <label class="form-label" style="font-weight:800; color:var(--primary-dark); display:flex; align-items:center; gap:8px; margin-bottom:16px;">
+                                                <i class="ph-bold ph-package"></i> 2. Variety Pool (Allowed Mangoes)
+                                            </label>
+                                            <div id="crate-varieties-list" style="display:grid; grid-template-columns: 1fr 1fr; gap:12px; margin-bottom:20px;">
+                                                <!-- Variety cards will be injected here -->
+                                            </div>
+                                            <button type="button" class="btn btn-primary" onclick="addVarietySlotToPool()" style="width:100%; font-size:12px;">
+                                                <i class="ph ph-magnifying-glass-plus"></i> Add Mango to Pool
+                                            </button>
+                                        </div>
+
                                     </div>
                                 </div>
 

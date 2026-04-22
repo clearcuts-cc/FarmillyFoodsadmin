@@ -3,18 +3,30 @@ const supabaseUrl = 'https://jztreusepxilnfqffwka.supabase.co';
 const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp6dHJldXNlcHhpbG5mcWZmd2thIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ4NzA5OTUsImV4cCI6MjA5MDQ0Njk5NX0.AXaOi_ax6esifM7DzwVjNXQrm3XLNPnzT_0yQWm6ahY';
 let supabaseClient = null;
 
-function initSupabase() {
-    if (supabaseClient) return true;
-    if (window.supabase && window.supabase.createClient) {
-        supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
-        console.log('✅ Supabase initialized successfully');
-        return true;
+// --- Cookie Helpers ---
+const CookieManager = {
+    set: function(name, value, days = 7) {
+        if (window.location.protocol === 'file:') { localStorage.setItem(name, value); return; }
+        const date = new Date();
+        date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
+        document.cookie = name + "=" + (value || "") + "; expires=" + date.toUTCString() + "; path=/; SameSite=Lax";
+        localStorage.setItem(name, value);
+    },
+    get: function(name) {
+        if (window.location.protocol === 'file:') return localStorage.getItem(name);
+        const nameEQ = name + "=";
+        const ca = document.cookie.split(';');
+        for (let i = 0; i < ca.length; i++) {
+            let c = ca[i].trim();
+            if (c.indexOf(nameEQ) === 0) return c.substring(nameEQ.length);
+        }
+        return localStorage.getItem(name);
+    },
+    erase: function(name) {
+        document.cookie = name + '=; Max-Age=-99999999; path=/; SameSite=Lax';
+        localStorage.removeItem(name);
     }
-    return false;
-}
-
-// Try immediately
-initSupabase();
+};
 
 // --- Global State ---
 let allProducts = [];
@@ -24,107 +36,99 @@ let currentOrderFilter = 'all';
 let notifications = [];
 let currentModalOrder = null;
 
-// --- Boot: wait for Supabase then load data ---
-document.addEventListener('DOMContentLoaded', () => {
-    console.log('📦 DOMContentLoaded fired');
-    function bootAdmin() {
-        console.log('🔧 bootAdmin: attempting initSupabase...');
-        if (!initSupabase()) {
-            console.log('⏳ Supabase CDN not ready, retrying in 300ms...');
-            setTimeout(bootAdmin, 300);
-            return;
-        }
-        console.log('✅ bootAdmin: Supabase ready! adminLoggedIn:', localStorage.getItem('adminLoggedIn'));
-        
-        // Handle routing based on URL
-        handleRouting();
-
-        // Check current session
-        checkSession();
-
-        // Listen for auth changes
-        supabaseClient.auth.onAuthStateChange((event, session) => {
-            console.log('🔔 Auth Event:', event);
-            if (session) {
-                localStorage.setItem('adminLoggedIn', 'true');
-                showAdminContent();
-                // If it was a redirect from magic link, clear URL
-                if (event === 'SIGNED_IN') {
-                    const next = sessionStorage.getItem('redirectAfterLogin') || 'dashboard';
-                    sessionStorage.removeItem('redirectAfterLogin');
-                    navigateTo(next);
-                }
-            } else {
-                localStorage.removeItem('adminLoggedIn');
-                showLoginScreen();
-            }
-        });
-    }
-    bootAdmin();
-});
-
-async function checkSession() {
-    const { data: { session } } = await supabaseClient.auth.getSession();
-    if (session) {
-        localStorage.setItem('adminLoggedIn', 'true');
-        showAdminContent();
-    } else {
-        localStorage.removeItem('adminLoggedIn');
-        showLoginScreen();
-    }
+// --- UI Helpers: Show/Hide dashboard or login ---
+function showAdminContent() {
+    const loginScreen = document.getElementById('login-screen');
+    const sidebar     = document.getElementById('sidebar');
+    const mainWrapper = document.getElementById('main-wrapper');
+    document.body.classList.remove('show-login');
+    if (loginScreen) loginScreen.style.display = 'none';
+    if (sidebar)     sidebar.style.display     = 'flex';
+    if (mainWrapper) mainWrapper.style.display = 'block';
 }
 
 function showLoginScreen() {
     const loginScreen = document.getElementById('login-screen');
-    const sidebar = document.getElementById('sidebar');
+    const sidebar     = document.getElementById('sidebar');
     const mainWrapper = document.getElementById('main-wrapper');
-    if (loginScreen) loginScreen.style.display = 'flex';
-    if (sidebar) sidebar.style.display = 'none';
-    if (mainWrapper) mainWrapper.style.display = 'none';
     document.body.classList.add('show-login');
+    if (loginScreen) loginScreen.style.display = 'flex';
+    if (sidebar)     sidebar.style.display     = 'none';
+    if (mainWrapper) mainWrapper.style.display = 'none';
 }
 
+// ─────────────────────────────────────────────────────────
+//  BOOT — runs AFTER DOM is ready so elements always exist
+// ─────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+    function tryInit() {
+        if (!window.supabase || !window.supabase.createClient) {
+            // Supabase CDN not loaded yet — retry in 200ms
+            setTimeout(tryInit, 200);
+            return;
+        }
 
-function showAdminContent() {
-    console.log('🏠 showAdminContent called, supabaseClient:', supabaseClient ? 'ready' : 'NULL');
-    
-    const loginScreen = document.getElementById('login-screen');
-    const sidebar = document.getElementById('sidebar');
-    const mainWrapper = document.getElementById('main-wrapper');
+        // Init client — use DEFAULT storage key so the JWT is found on refresh
+        supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey, {
+            auth: {
+                persistSession: true,
+                autoRefreshToken: true,
+                detectSessionInUrl: false
+            }
+        });
+        console.log('✅ Supabase client ready');
 
-    if (loginScreen) loginScreen.style.display = 'none';
-    if (sidebar) sidebar.style.display = 'flex';
-    if (mainWrapper) mainWrapper.style.display = 'flex';
-    
-    document.body.classList.remove('show-login');
-    
-    if (supabaseClient) {
-        console.log('📊 Calling renderDashboard, fetchDeliveryConfig, loadCategoryOptions...');
-        renderDashboard();
-        fetchDeliveryConfig();
-        loadCategoryOptions();
-    } else {
-        console.error('❌ showAdminContent: supabaseClient is NULL, data will not load!');
+        // ① On page load — check if a session is already stored
+        supabaseClient.auth.getSession().then(({ data }) => {
+            if (data.session) {
+                console.log('🔑 Session restored on refresh');
+                CookieManager.set('adminLoggedIn', 'true');
+                showAdminContent();
+                loadDashboardData();
+                handleRouting();
+            } else {
+                console.log('🔒 No session — showing login');
+                CookieManager.erase('adminLoggedIn');
+                showLoginScreen();
+            }
+        });
+
+        // ② Listen for live changes (login, logout, token refresh)
+        supabaseClient.auth.onAuthStateChange((event, session) => {
+            console.log('🔄 Auth event:', event);
+            if (event === 'SIGNED_IN') {
+                CookieManager.set('adminLoggedIn', 'true');
+                showAdminContent();
+                loadDashboardData();
+                handleRouting();
+            } else if (event === 'SIGNED_OUT') {
+                CookieManager.erase('adminLoggedIn');
+                showLoginScreen();
+            }
+            // TOKEN_REFRESHED keeps session alive silently — no UI change needed
+        });
     }
-}
+
+    tryInit();
+});
+
+
 
 function togglePasswordVisibility() {
-    console.log('👁️ Toggling password visibility...');
     const passwordInput = document.getElementById('login-password');
-    const eyeIcon = document.getElementById('toggle-password');
+    const eyeIcon       = document.getElementById('toggle-password');
     
     if (passwordInput && eyeIcon) {
         if (passwordInput.type === 'password') {
             passwordInput.type = 'text';
-            eyeIcon.classList.remove('ph-eye');
+            // Remove both variants and add the correct one
+            eyeIcon.classList.remove('ph-eye', 'ph-eye-slash');
             eyeIcon.classList.add('ph-eye-slash');
         } else {
             passwordInput.type = 'password';
-            eyeIcon.classList.remove('ph-eye-slash');
+            eyeIcon.classList.remove('ph-eye-slash', 'ph-eye');
             eyeIcon.classList.add('ph-eye');
         }
-    } else {
-        console.error('❌ Could not find password input or eye icon');
     }
 }
 
@@ -139,7 +143,7 @@ async function handleLogin() {
 
     if (!email || !password) return;
 
-    // Strict Restriction: Only allow the official admin email
+    // Only allow the official admin email
     if (email !== 'info.farmmily@gmail.com') {
         if (errorEl) {
             errorEl.style.display = 'block';
@@ -148,56 +152,40 @@ async function handleLogin() {
         return;
     }
 
+    if (errorEl) errorEl.style.display = 'none';
+
     try {
-        if(btn) {
+        if (btn) {
             btn.disabled = true;
             btn.innerHTML = '<i class="ph ph-circle-notch spinner-white"></i> Authenticating...';
         }
 
-        // --- Emergency Bypass for primary admin ---
-        if (email === 'info.farmmily@gmail.com' && password === 'Admin#123') {
-            console.log('✅ Admin bypass validated');
-            localStorage.setItem('adminLoggedIn', 'true');
-            showAdminContent();
-            navigateTo('dashboard');
-            showToast('Welcome back, Admin!', 'success');
-            return;
-        }
-        
-        const { data, error } = await supabaseClient.auth.signInWithPassword({
-            email: email,
-            password: password
-        });
-
+        const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
         if (error) throw error;
 
-        localStorage.setItem('adminLoggedIn', 'true');
-        showAdminContent();
-        navigateTo('dashboard');
+        // onAuthStateChange SIGNED_IN event will fire and call showAdminContent() automatically
         showToast('Welcome back, Admin!', 'success');
-        
+
     } catch (err) {
         console.error('❌ Login Error:', err);
         if (errorEl) {
             errorEl.style.display = 'block';
             errorEl.innerHTML = `<i class="ph ph-warning-circle"></i> ${err.message || 'Invalid credentials'}`;
         }
-        if(btn) {
+        if (btn) {
             btn.disabled = false;
             btn.innerHTML = '<i class="ph ph-sign-in"></i> Login to Dashboard';
         }
     }
 }
 
-async function handleLogout() {
-    await supabaseClient.auth.signOut();
-    localStorage.removeItem('adminLoggedIn');
-    showLoginScreen();
-    showToast('Logged out successfully');
-}
 
-function handleLogout() {
-    localStorage.removeItem('adminLoggedIn');
+async function handleLogout() {
+    try {
+        if (supabaseClient) await supabaseClient.auth.signOut();
+    } catch (e) {}
+    
+    CookieManager.erase('adminLoggedIn');
     location.reload();
 }
 
@@ -405,7 +393,7 @@ function handleRouting() {
         }
     }
 
-    if (localStorage.getItem('adminLoggedIn') === 'true') {
+    if (CookieManager.get('adminLoggedIn') === 'true') {
         navigateTo(targetPage, false);
     } else {
         // If not logged in, keep login screen but maybe track where they wanted to go
@@ -726,7 +714,7 @@ async function upsertVariantsWithFallback(payload) {
 }
 
 async function saveProductVariants(productId, rawQuantities, pricing = {}) {
-    const quantities = parseVariantQuantities(rawQuantities);
+    const quantities = Array.isArray(rawQuantities) ? rawQuantities : parseVariantQuantities(rawQuantities);
     const labels = quantities.map(qty => (typeof qty === 'object') ? qty.label : `${qty}kg`);
     const basePricePerKg = parseFloat(pricing.basePricePerKg || 0);
     const compareAtPerKg = parseFloat(pricing.compareAtPerKg || 0);
@@ -2396,12 +2384,17 @@ function resetProductForm() {
     if (btn) btn.innerHTML = '<i class="ph ph-floppy-disk"></i> Save Product';
 
     // Reset Crate Builder Groups
-    const groupContainer = document.getElementById('size-groups-container');
-    if (groupContainer) {
-        groupContainer.innerHTML = '';
-        // Re-create default 3kg and 5kg groups
-        addNewWeightGroup(3, 'Kg');
-        addNewWeightGroup(5, 'Kg');
+    const sizesList = document.getElementById('crate-sizes-list');
+    const varietyList = document.getElementById('crate-varieties-list');
+    if (sizesList) {
+        sizesList.innerHTML = '';
+        addBoxSizeRow(3, 'Kg', 0);
+        addBoxSizeRow(5, 'Kg', 0);
+    }
+    if (varietyList) {
+        varietyList.innerHTML = '';
+        addVarietySlotToPool();
+        addVarietySlotToPool();
     }
 
     if (form?.elements['product_type']) {
@@ -2430,12 +2423,20 @@ function handleUnitChange(unit) {
  * Shows/hides relevant form sections.
  */
 function handleProductTypeChange(type) {
-    const crateBuilder = document.getElementById('section-crate-builder');
-    if (crateBuilder) crateBuilder.style.display = (type === 'custom_box') ? 'block' : 'none';
-    
-    // Hide standard base price section if custom box
-    const standardPricing = document.getElementById('standard-pricing-section');
-    if (standardPricing) standardPricing.style.display = (type === 'custom_box') ? 'none' : 'block';
+    const sectionStandard = document.getElementById('standard-pricing-section');
+    const sectionCrate    = document.getElementById('section-crate-builder');
+
+    // Default hide all variant sections
+    if(sectionStandard) sectionStandard.style.display = 'none';
+    if(sectionCrate)    sectionCrate.style.display    = 'none';
+
+    // Build the visibility based on type
+    if (type === 'standard' || type === 'multi_kg') {
+        if(sectionStandard) sectionStandard.style.display = 'block';
+    } else if (type === 'custom_box') {
+        if(sectionCrate)    sectionCrate.style.display    = 'block';
+    }
+    // "single_product" hides both sections by default (as they were set to 'none' above)
 
     handleUnitChange(document.querySelector('#product-form select[name="unit"]')?.value || 'kg');
 
@@ -2450,77 +2451,67 @@ function handleProductTypeChange(type) {
     }
 }
 
-function addNewWeightGroup(val, unit) {
-    const groupContainer = document.getElementById('size-groups-container');
-    if (!groupContainer) return;
-
-    if (!val) {
-        val = document.getElementById('new-group-weight')?.value;
-        unit = document.getElementById('new-group-unit')?.value || 'Kg';
-    }
-    if (!val) return;
-
-    const groupId = `group-${val}${unit}`.replace(/[^a-zA-Z0-9]/g, '');
-    if (document.getElementById(groupId)) {
-        showToast('Group already exists', 'warning');
-        return;
-    }
-
-    const groupDiv = document.createElement('div');
-    groupDiv.id = groupId;
-    groupDiv.className = 'size-group-section';
-    groupDiv.innerHTML = `
-        <div class="crate-group-header">
-            <h4 class="crate-group-title">
-                <i class="ph ph-package" style="color:var(--primary)"></i> ${val}${unit} Variety List
-            </h4>
-            <button type="button" class="crate-slot-remove-btn" onclick="confirmDeleteGroup(this)" style="width:26px; height:26px;" title="Remove this entire weight category">
-                <i class="ph ph-trash"></i>
-            </button>
-        </div>
-        <div class="crate-slots-list" style="display:flex; flex-direction:column; gap:12px;"></div>
-        <button type="button" class="btn-crate-add" onclick="addCrateSlotToGroup('${groupId}', '${val}', '${unit}')">+ Add ${val}${unit} Variety</button>
-    `;
-
-    groupContainer.appendChild(groupDiv);
-    
-    // Add 2 initial slots
-    addCrateSlotToGroup(groupId, val, unit);
-    addCrateSlotToGroup(groupId, val, unit);
-
-    if (document.getElementById('new-group-weight')) document.getElementById('new-group-weight').value = '';
-}
-
-function confirmDeleteGroup(btn) {
-    if (confirm('Are you sure you want to remove this entire weight category and all its products?')) {
-        btn.closest('.size-group-section').remove();
-        showToast('Weight Group removed', 'info');
-    }
-}
-
-function addCrateSlotToGroup(groupId, val, unit) {
-    const list = document.querySelector(`#${groupId} .crate-slots-list`);
+function addBoxSizeRow(val, unit, price, sku) {
+    const list = document.getElementById('crate-sizes-list');
     if (!list) return;
 
-    const slotCount = list.querySelectorAll('.crate-slot').length + 1;
+    const row = document.createElement('div');
+    row.style.display = 'flex';
+    row.style.gap = '8px';
+    row.style.alignItems = 'center';
+    row.innerHTML = `
+        <input type="number" class="form-control size-val" value="${val || ''}" placeholder="Wt" style="width:60px; font-weight:700;">
+        <select class="form-control size-unit" style="width:70px;">
+            <option value="Kg" ${unit === 'Kg' ? 'selected' : ''}>Kg</option>
+            <option value="Gm" ${unit === 'Gm' ? 'selected' : ''}>Gm</option>
+        </select>
+        <div style="position:relative; flex:1;">
+            <span style="position:absolute; left:8px; top:50%; transform:translateY(-50%); font-size:10px; color:#94a3b8; font-weight:700;">₹</span>
+            <input type="number" class="form-control size-price" value="${price || ''}" placeholder="Box Price" style="padding-left:20px;">
+        </div>
+        <input type="text" class="form-control size-sku" value="${sku || ''}" placeholder="SKU" style="width:100px; font-size:11px;">
+        <button type="button" class="btn btn-outline" onclick="this.parentElement.remove()" style="padding:6px; color:#ef4444; border-color:#fee2e2;"><i class="ph ph-trash"></i></button>
+    `;
+    list.appendChild(row);
+}
+
+function addVarietySlotToPool(skuValue) {
+    const list = document.getElementById('crate-varieties-list');
+    if (!list) return;
+
     const slot = document.createElement('div');
-    slot.className = 'crate-slot';
+    slot.className = 'crate-slot variety-pool-item';
+    slot.style.margin = '0';
     slot.innerHTML = `
-        <span style="font-size:10px; font-weight:800; color:#64748b; display:block; margin-bottom:8px; text-transform:uppercase;">Variety ${slotCount} (${val}${unit})</span>
-        <button type="button" class="crate-slot-remove-btn" onclick="this.parentElement.remove()" title="Remove this variety">
-            <i class="ph ph-x" style="font-size:12px;"></i>
-        </button>
-        <input type="text" class="form-control custom-var-id" placeholder="Search Product SKU / Name..." style="margin-bottom:10px; font-size:12px;">
-        <div style="display:flex; gap:8px;">
-            <input type="hidden" class="custom-var-size" value="${val}">
-            <input type="hidden" class="custom-var-unit" value="${unit}">
-            <div style="position:relative; flex:1;">
-                <span style="position:absolute; left:8px; top:50%; transform:translateY(-50%); font-size:10px; color:#94a3b8; font-weight:700;">₹</span>
-                <input type="number" class="form-control custom-var-price" placeholder="0.00" style="padding-left:20px; font-size:12px;">
+        <div class="variety-display-header" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+            <span style="font-size:10px; font-weight:800; color:#64748b; text-transform:uppercase;">Pool Variety</span>
+            <button type="button" class="crate-slot-remove-btn" onclick="this.parentElement.parentElement.remove()" style="position:static; padding:4px;"><i class="ph ph-trash"></i></button>
+        </div>
+        
+        <div class="variety-product-preview" style="display:none; align-items:center; gap:8px; background:#f8fafc; padding:6px; border-radius:6px; border:1px solid #e2e8f0; cursor:pointer;">
+            <img src="" class="preview-img" style="width:24px; height:24px; border-radius:4px; object-fit:cover;">
+            <div style="flex:1; overflow:hidden;">
+                <div class="preview-name" style="font-size:11px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"></div>
             </div>
         </div>
+
+        <input type="text" class="form-control custom-var-id" value="${skuValue || ''}" placeholder="Search Product / Variety..." style="font-size:11px;">
     `;
     list.appendChild(slot);
+    
+    if (skuValue) {
+        // Trigger preview load if SKU provided
+        const productData = allProducts.find(p => p.sku === skuValue);
+        if (productData) {
+            const preview = slot.querySelector('.variety-product-preview');
+            const input = slot.querySelector('.custom-var-id');
+            preview.style.display = 'flex';
+            preview.querySelector('.preview-img').src = productData.image_url || '';
+            preview.querySelector('.preview-name').innerText = productData.name;
+            input.style.display = 'none';
+            preview.onclick = () => { preview.style.display='none'; input.style.display='block'; input.focus(); };
+        }
+    }
 }
 
 function addCustomSizePair() {
@@ -2679,32 +2670,26 @@ async function editProduct(id) {
         const { data: variants } = await supabaseClient.from('product_variants').select('*').eq('product_id', id).order('id', { ascending: true });
         
         if (variants && variants.length > 0) {
-            const groupContainer = document.getElementById('size-groups-container');
-            if(groupContainer) groupContainer.innerHTML = ''; // Clear existing
+            const sizesList = document.getElementById('crate-sizes-list');
+            const varietyList = document.getElementById('crate-varieties-list');
+            if (sizesList) sizesList.innerHTML = '';
+            if (varietyList) varietyList.innerHTML = '';
 
+            const addedPoolSkus = new Set();
             variants.forEach(v => {
                 const label = v.label || '';
-                // Split label (e.g. "7Kg") into value and unit
-                const match = label.match(/^(\d+)(.*)$/);
-                const val = match ? match[1] : '3';
-                const unit = match ? match[2] : 'Kg';
-
-                const groupId = `group-${val}${unit}`.replace(/[^a-zA-Z0-9]/g, '');
-                if (!document.getElementById(groupId)) {
-                    addNewWeightGroup(val, unit);
-                }
-
-                const list = document.querySelector(`#${groupId} .crate-slots-list`);
-                // Find first slot in this group without an ID, or add new one
-                let targetSlot = Array.from(list.querySelectorAll('.crate-slot')).find(s => !s.querySelector('.custom-var-id').value);
-                if (!targetSlot) {
-                    addCrateSlotToGroup(groupId, val, unit);
-                    targetSlot = list.lastElementChild;
-                }
-
-                if (targetSlot) {
-                    targetSlot.querySelector('.custom-var-id').value = v.sku || '';
-                    targetSlot.querySelector('.custom-var-price').value = v.price || '';
+                if (label.includes('VarietyPool:')) {
+                    const sku = v.sku || label.split('VarietyPool:')[1]?.trim();
+                    if (sku && !addedPoolSkus.has(sku)) {
+                        addVarietySlotToPool(sku);
+                        addedPoolSkus.add(sku);
+                    }
+                } else {
+                    // It's a weight option
+                    const match = label.match(/^(\d+)([a-zA-Z]+)/);
+                    if (match) {
+                        addBoxSizeRow(match[1], match[2], v.price, v.sku);
+                    }
                 }
             });
         }
@@ -2733,25 +2718,39 @@ async function saveProduct(event) {
     let compareAtPerKg = 0;
 
     if (productType === 'custom_box') {
-        const groupContainer = document.getElementById('size-groups-container');
-        const allSlots = groupContainer?.querySelectorAll('.crate-slot') || [];
+        const sizesList = document.getElementById('crate-sizes-list');
+        const varietyList = document.getElementById('crate-varieties-list');
         
         customVariantPayload = [];
-        allSlots.forEach(slot => {
-            const idInput = slot.querySelector('.custom-var-id');
-            const sizeInput = slot.querySelector('.custom-var-size');
-            const unitInput = slot.querySelector('.custom-var-unit');
-            const priceInput = slot.querySelector('.custom-var-price');
-
-            const sku = idInput?.value?.trim();
-            if (sku) {
-                const label = `${sizeInput?.value || ''}${unitInput?.value || 'Kg'}`;
+        
+        // 1. Collect Sizes
+        sizesList?.querySelectorAll('div').forEach(row => {
+            const val = row.querySelector('.size-val')?.value;
+            const unit = row.querySelector('.size-unit')?.value;
+            const price = parseFloat(row.querySelector('.size-price')?.value) || 0;
+            const sku = row.querySelector('.size-sku')?.value?.trim();
+            if (val && price) {
+                const label = `${val}${unit}`;
                 customVariantPayload.push({
                     label: label,
-                    sku: sku,
-                    price: parseFloat(priceInput?.value) || 0
+                    sku: sku || null,
+                    price: price,
+                    quantity_kg: parseFloat(val) || 0
                 });
                 variantQuantities.push(label);
+            }
+        });
+
+        // 2. Collect Unified Variety Pool
+        varietyList?.querySelectorAll('.variety-pool-item').forEach(slot => {
+            const sku = slot.querySelector('.custom-var-id')?.value?.trim();
+            if (sku) {
+                customVariantPayload.push({
+                    label: `VarietyPool:${sku}`,
+                    sku: sku,
+                    price: 0, // Varieties in pool don't have individual price if box is flat-rate
+                    quantity_kg: 0
+                });
             }
         });
     } else {
@@ -2780,8 +2779,9 @@ async function saveProduct(event) {
         base_price:              basePricePerKg,
         base_price_per_kg:       basePricePerKg,
         compare_at_price_per_kg: compareAtPerKg || null,
-        available_weights:       variantQuantities,
-        variant_quantities:      variantQuantities.join(','),
+        available_weights:       [...new Set(variantQuantities.map(v => parseFloat(v) || 0))].sort((a,b) => a - b),
+        variant_quantities:      [...new Set(variantQuantities)].join(','),
+        unit:                    form.elements['unit']?.value || 'kg',
         price:                   defaultPrice,
         original_price:          defaultOldPrice,
         stock_count:             parseInt(form.elements['stock_count'].value) || 0,
@@ -2946,10 +2946,62 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if(!typedSku || typedSku.length < 2) return;
 
-            const matches = allProducts.filter(p => 
-                (p.sku && p.sku.toUpperCase().includes(typedSku)) || 
-                (p.name && p.name.toUpperCase().includes(typedSku))
-            ).slice(0, 5); // Limit to 5 results
+            const val = typedSku.toLowerCase();
+            const results = allProducts.filter(p => {
+                const searchStr = `${p.name} ${p.sku} ${p.categories?.name || ''}`.toLowerCase();
+                return searchStr.includes(val);
+            }).sort((a,b) => a.name.toLowerCase().startsWith(val) ? -1 : 1).slice(0, 8);
+
+            if(results.length > 0) {
+                const dropdown = document.createElement('div');
+                dropdown.id = 'sku-autocomplete-list';
+                const rect = input.getBoundingClientRect();
+                dropdown.style.cssText = `
+                    position: absolute; background: white; border: 1px solid #e2e8f0;
+                    border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+                    z-index: 1000; width: ${Math.max(input.offsetWidth, 250)}px;
+                    max-height: 280px; overflow-y: auto; padding: 8px 0;
+                    top: ${window.scrollY + rect.bottom + 8}px; left: ${window.scrollX + rect.left}px;
+                `;
+
+                results.forEach(p => {
+                    const item = document.createElement('div');
+                    item.style.cssText = `padding: 10px 16px; cursor: pointer; display: flex; align-items: center; gap: 12px; transition: all 0.2s;`;
+                    item.innerHTML = `
+                        <img src="${p.image_url || 'https://via.placeholder.com/40'}" style="width:36px; height:36px; border-radius:8px; object-fit:cover; background:#f1f5f9;">
+                        <div style="flex:1; overflow:hidden;">
+                            <div style="font-weight:800; color:#1e293b; font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${p.name}</div>
+                            <div style="font-size:10px; color:#64748b;">${p.categories?.name || 'Variety'} • SKU: ${p.sku || '-'}</div>
+                        </div>
+                        <div style="font-weight:800; color:#1e293b; font-size:13px;">₹${p.base_price || 0}</div>
+                    `;
+                    item.onclick = () => {
+                        input.value = p.sku;
+                        const parent = input.closest('.crate-slot') || input.closest('.custom-var-row') || input.closest('.variety-pool-item');
+                        const previewArea = parent?.querySelector('.variety-product-preview');
+                        if (previewArea) {
+                            previewArea.style.display = 'flex';
+                            previewArea.querySelector('.preview-img').src = p.image_url || '';
+                            previewArea.querySelector('.preview-name').innerText = p.name;
+                            input.style.display = 'none';
+                            previewArea.onclick = () => {
+                                previewArea.style.display = 'none';
+                                input.style.display = 'block';
+                                input.focus();
+                                input.select();
+                            };
+                        }
+                        const priceInput = parent?.querySelector('.custom-var-price') || parent?.querySelector('.size-price');
+                        if(priceInput) priceInput.value = p.base_price || 0;
+                        dropdown.remove();
+                    };
+                    item.onmouseover = () => { item.style.background = '#f1f5f9'; item.style.transform = 'translateX(4px)'; };
+                    item.onmouseout = () => { item.style.background = 'white'; item.style.transform = 'translateX(0)'; };
+                    dropdown.appendChild(item);
+                });
+                document.body.appendChild(dropdown);
+                return; // Early exit since we handled it
+            }
 
             if(matches.length > 0) {
                 const dropdown = document.createElement('div');
@@ -2986,6 +3038,25 @@ document.addEventListener('DOMContentLoaded', () => {
                         input.value = p.sku;
                         // Support both old list and new crate builder layouts
                         const parent = input.closest('.crate-slot') || input.closest('.custom-var-row');
+                        
+                        // Update Crate Builder Preview if applicable
+                        const previewArea = parent?.querySelector('.variety-product-preview');
+                        if (previewArea) {
+                            previewArea.style.display = 'flex';
+                            previewArea.querySelector('.preview-img').src = p.image_url || '';
+                            previewArea.querySelector('.preview-name').innerText = p.name;
+                            previewArea.querySelector('.preview-sku').innerText = p.sku;
+                            input.style.display = 'none'; // Hide input
+                            
+                            // Add click to edit logic
+                            previewArea.onclick = () => {
+                                previewArea.style.display = 'none';
+                                input.style.display = 'block';
+                                input.focus();
+                                input.select();
+                            };
+                        }
+
                         const priceInput = parent?.querySelector('.custom-var-price');
                         if(priceInput) priceInput.value = p.base_price || 0;
                         dropdown.remove();
