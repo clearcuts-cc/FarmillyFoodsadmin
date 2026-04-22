@@ -44,7 +44,7 @@ function showAdminContent() {
     document.body.classList.remove('show-login');
     if (loginScreen) loginScreen.style.display = 'none';
     if (sidebar)     sidebar.style.display     = 'flex';
-    if (mainWrapper) mainWrapper.style.display = 'block';
+    if (mainWrapper) mainWrapper.style.display = 'flex';
 }
 
 function showLoginScreen() {
@@ -1275,7 +1275,8 @@ function buildProductsTable(products) {
         const typeLabels = {
             'standard': 'Single Product',
             'multi': 'Multi Product',
-            'custom_box': 'Custom Box',
+            'custom_box': 'Custom Mix Crate',
+            'custom': 'Custom Variations',
             'corporate_box': 'Corporate Box'
         };
         const typeLabel = typeLabels[p.product_type] || (p.product_type || 'Single Product').replace(/_/g, ' ');
@@ -2404,6 +2405,20 @@ function resetProductForm() {
     if (form?.elements['priority']) form.elements['priority'].value = '100';
     if (form?.elements['variant_quantities']) form.elements['variant_quantities'].value = '3,5,7,10,15';
     if (form?.elements['show_on_shop']) form.elements['show_on_shop'].checked = true;
+
+    // Reset Custom Sizing Pairs
+    const customLeft = document.getElementById('custom-size-left-list');
+    const customRight = document.getElementById('custom-size-right-list');
+    if (customLeft) {
+        Array.from(customLeft.children).forEach(child => {
+            if (child.tagName !== 'LABEL') child.remove();
+        });
+    }
+    if (customRight) {
+        Array.from(customRight.children).forEach(child => {
+            if (child.tagName !== 'LABEL') child.remove();
+        });
+    }
     
     // Set default values for ratings
     if (form?.elements['rating']) form.elements['rating'].value = '5.0';
@@ -2425,18 +2440,21 @@ function handleUnitChange(unit) {
 function handleProductTypeChange(type) {
     const sectionStandard = document.getElementById('standard-pricing-section');
     const sectionCrate    = document.getElementById('section-crate-builder');
+    const sectionCustom   = document.getElementById('section-custom-order');
 
     // Default hide all variant sections
     if(sectionStandard) sectionStandard.style.display = 'none';
     if(sectionCrate)    sectionCrate.style.display    = 'none';
+    if(sectionCustom)   sectionCustom.style.display   = 'none';
 
     // Build the visibility based on type
-    if (type === 'standard' || type === 'multi_kg') {
+    if (type === 'standard' || type === 'multi_kg' || type === 'multi' || type === 'corporate_box') {
         if(sectionStandard) sectionStandard.style.display = 'block';
     } else if (type === 'custom_box') {
         if(sectionCrate)    sectionCrate.style.display    = 'block';
+    } else if (type === 'custom') {
+        if(sectionCustom)   sectionCustom.style.display   = 'block';
     }
-    // "single_product" hides both sections by default (as they were set to 'none' above)
 
     handleUnitChange(document.querySelector('#product-form select[name="unit"]')?.value || 'kg');
 
@@ -2459,18 +2477,20 @@ function addBoxSizeRow(val, unit, price, sku) {
     row.style.display = 'flex';
     row.style.gap = '8px';
     row.style.alignItems = 'center';
+    row.style.marginBottom = '8px';
     row.innerHTML = `
-        <input type="number" class="form-control size-val" value="${val || ''}" placeholder="Wt" style="width:60px; font-weight:700;">
-        <select class="form-control size-unit" style="width:70px;">
-            <option value="Kg" ${unit === 'Kg' ? 'selected' : ''}>Kg</option>
-            <option value="Gm" ${unit === 'Gm' ? 'selected' : ''}>Gm</option>
+        <input type="number" class="form-control size-val" value="${val || ''}" placeholder="Qty" style="width:70px; font-weight:700;">
+        <select class="form-control size-unit" style="width:75px; font-size:12px;">
+            <option value="kg" ${unit?.toLowerCase() === 'kg' ? 'selected' : ''}>kg</option>
+            <option value="g" ${unit?.toLowerCase() === 'g' ? 'selected' : ''}>g</option>
+            <option value="pcs" ${unit?.toLowerCase() === 'pcs' ? 'selected' : ''}>pcs</option>
         </select>
         <div style="position:relative; flex:1;">
             <span style="position:absolute; left:8px; top:50%; transform:translateY(-50%); font-size:10px; color:#94a3b8; font-weight:700;">₹</span>
-            <input type="number" class="form-control size-price" value="${price || ''}" placeholder="Box Price" style="padding-left:20px;">
+            <input type="number" class="form-control size-price" value="${price || ''}" placeholder="Price" style="padding-left:20px;">
         </div>
-        <input type="text" class="form-control size-sku" value="${sku || ''}" placeholder="SKU" style="width:100px; font-size:11px;">
-        <button type="button" class="btn btn-outline" onclick="this.parentElement.remove()" style="padding:6px; color:#ef4444; border-color:#fee2e2;"><i class="ph ph-trash"></i></button>
+        <input type="text" class="form-control size-sku" value="${sku || ''}" placeholder="ID/SKU" style="width:90px; font-size:11px;">
+        <button type="button" class="btn btn-outline" onclick="this.parentElement.remove()" style="padding:6px; color:#ef4444; border-color:#fee2e2; background:white;"><i class="ph ph-trash"></i></button>
     `;
     list.appendChild(row);
 }
@@ -2629,6 +2649,41 @@ function generateProductSku(name) {
     return `${abbr}-${String(nextNum).padStart(3, '0')}`;
 }
 
+function addCustomSizePair(labelVal, skuVal, priceVal) {
+    const leftList = document.getElementById('custom-size-left-list');
+    const rightList = document.getElementById('custom-size-right-list');
+
+    if (!leftList || !rightList) return;
+
+    const rowId = 'row-' + Date.now() + Math.floor(Math.random() * 1000);
+
+    // Add exactly one empty row to left side
+    const lInput = document.createElement('input');
+    lInput.type = 'text';
+    lInput.className = 'form-control custom-var-size';
+    lInput.placeholder = 'e.g. 10Kg';
+    lInput.value = labelVal || '';
+    lInput.dataset.rowId = rowId;
+    leftList.appendChild(lInput);
+
+    // Add corresponding row to right side
+    const rDiv = document.createElement('div');
+    rDiv.style.display = 'flex';
+    rDiv.style.gap = '12px';
+    rDiv.className = 'custom-var-row';
+    rDiv.dataset.rowId = rowId;
+    rDiv.innerHTML = `
+        <input type="text" class="form-control custom-var-id" placeholder="ID (e.g. BANG-10)" value="${skuVal || ''}" style="flex:1;">
+        <input type="number" class="form-control custom-var-price" placeholder="Price (₹)" value="${priceVal || ''}" style="width:120px;">
+        <button type="button" class="btn btn-outline" onclick="removeCustomSizePair('${rowId}')" style="padding:6px; color:#ef4444; border-color:#fee2e2; flex-shrink:0;"><i class="ph ph-trash"></i></button>
+    `;
+    rightList.appendChild(rDiv);
+}
+
+function removeCustomSizePair(rowId) {
+    document.querySelectorAll(`[data-row-id="${rowId}"]`).forEach(el => el.remove());
+}
+
 async function editProduct(id) {
     const p = allProducts.find(x => x.id == id);
     if(!p) { showToast('Product not found. Please refresh the page.', 'error'); return; }
@@ -2665,7 +2720,9 @@ async function editProduct(id) {
     
     // Star Rating Fields
     form.elements['rating'].value = p.rating || '5.0';
-    form.elements['review_count'].value = p.review    // Load Crate Builder Slots if applicable
+    form.elements['review_count'].value = p.review_count || 0;
+
+    // Load Crate Builder Slots if applicable
     if (pType === 'custom_box') {
         const { data: variants } = await supabaseClient.from('product_variants').select('*').eq('product_id', id).order('id', { ascending: true });
         
@@ -2691,6 +2748,21 @@ async function editProduct(id) {
                         addBoxSizeRow(match[1], match[2], v.price, v.sku);
                     }
                 }
+            });
+        }
+    } else if (pType === 'custom') {
+        const { data: variants } = await supabaseClient.from('product_variants').select('*').eq('product_id', id).order('id', { ascending: true });
+        if (variants && variants.length > 0) {
+            const leftList = document.getElementById('custom-size-left-list');
+            const rightList = document.getElementById('custom-size-right-list');
+            if (leftList) {
+                Array.from(leftList.children).forEach(child => { if (child.tagName !== 'LABEL') child.remove(); });
+            }
+            if (rightList) {
+                Array.from(rightList.children).forEach(child => { if (child.tagName !== 'LABEL') child.remove(); });
+            }
+            variants.forEach(v => {
+                addCustomSizePair(v.label, v.sku, v.price);
             });
         }
     }
@@ -2748,9 +2820,39 @@ async function saveProduct(event) {
                 customVariantPayload.push({
                     label: `VarietyPool:${sku}`,
                     sku: sku,
-                    price: 0, // Varieties in pool don't have individual price if box is flat-rate
+                    price: 0,
                     quantity_kg: 0
                 });
+            }
+        });
+
+        // Ensure we have at least one weight for storefront display
+        if (variantQuantities.length === 0) {
+            variantQuantities.push('3kg'); // Default fallback
+        }
+    } else if (productType === 'custom') {
+        const leftList = document.getElementById('custom-size-left-list');
+        const rightList = document.getElementById('custom-size-right-list');
+        
+        customVariantPayload = [];
+        
+        const labels = leftList?.querySelectorAll('.custom-var-size') || [];
+        const rows = rightList?.querySelectorAll('.custom-var-row') || [];
+        
+        labels.forEach((lInput, i) => {
+            const label = lInput.value.trim();
+            const rRow = rows[i];
+            const sku = rRow?.querySelector('.custom-var-id')?.value?.trim();
+            const price = parseFloat(rRow?.querySelector('.custom-var-price')?.value) || 0;
+            
+            if (label && !isNaN(price)) {
+                customVariantPayload.push({
+                    label: label,
+                    sku: sku || null,
+                    price: price,
+                    quantity_kg: parseFloat(label) || 0
+                });
+                variantQuantities.push(label);
             }
         });
     } else {

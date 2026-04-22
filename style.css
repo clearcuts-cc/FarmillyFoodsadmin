@@ -119,6 +119,7 @@ body {
     overflow-y: auto;
     padding: 20px 12px;
     position: relative;
+    min-height: 0;
 }
 
 /* Sidebar Links */
@@ -363,6 +364,7 @@ body {
     flex: 1;
     overflow-y: auto;
     padding: 32px;
+    min-height: 0; /* Ensures scroll works correctly in flex layouts */
 }
 
 /* =========================================================================
@@ -996,6 +998,7 @@ input:checked + .slider:before { transform: translateX(22px); }
     align-items: center;
     justify-content: center;
     z-index: 9999;
+    overflow-y: auto;
 }
 .login-container::before {
     content: '';

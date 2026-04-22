@@ -448,34 +448,64 @@
                                 
                                 <!-- Unified Crate / Variety Builder -->
                                 <div id="section-crate-builder" style="display:none; margin-top:24px;">
-                                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:24px;">
+                                    <div style="background:var(--primary-light); color:white; padding:10px 15px; border-radius:12px 12px 0 0; font-weight:800; display:flex; align-items:center; gap:8px;">
+                                        <i class="ph-bold ph-magic-wand"></i> CUSTOM MIX BUILDER
+                                    </div>
+                                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:24px; background:white; padding:20px; border:1px solid var(--border-color); border-top:0; border-radius:0 0 12px 12px;">
                                         
                                         <!-- Left: Box Sizes & Pricing -->
-                                        <div class="card" style="padding:16px; border:1px solid #e2e8f0; background:#fff;">
+                                        <div class="card" style="padding:16px; border:1px solid #e2e8f0; background:#f8fafc; box-shadow:none;">
                                             <label class="form-label" style="font-weight:800; color:var(--primary-dark); display:flex; align-items:center; gap:8px; margin-bottom:16px;">
-                                                <i class="ph-bold ph-scales"></i> 1. Box Sizes & Pricing
+                                                <i class="ph-bold ph-scales"></i> 1. Define Box Sizes & Pricing
                                             </label>
                                             <div id="crate-sizes-list" style="display:flex; flex-direction:column; gap:10px; margin-bottom:20px;">
                                                 <!-- Size rows will be injected here -->
                                             </div>
-                                            <button type="button" class="btn btn-outline" onclick="addBoxSizeRow()" style="width:100%; border-style:dashed; font-size:12px;">
-                                                <i class="ph ph-plus-circle"></i> Add New Box Size
+                                            <button type="button" class="btn btn-outline" onclick="addBoxSizeRow()" style="width:100%; border-style:dashed; font-size:12px; background:white;">
+                                                <i class="ph ph-plus-circle"></i> Add New Box Size (e.g. 3kg, 5kg)
                                             </button>
                                         </div>
 
                                         <!-- Right: Variety Pool -->
-                                        <div class="card" style="padding:16px; border:1px solid #e2e8f0; background:#fff;">
+                                        <div class="card" style="padding:16px; border:1px solid #e2e8f0; background:#f8fafc; box-shadow:none;">
                                             <label class="form-label" style="font-weight:800; color:var(--primary-dark); display:flex; align-items:center; gap:8px; margin-bottom:16px;">
-                                                <i class="ph-bold ph-package"></i> 2. Variety Pool (Allowed Mangoes)
+                                                <i class="ph-bold ph-package"></i> 2. Variety Selection Pool
                                             </label>
+                                            <p style="font-size:10px; color:var(--text-muted); margin-bottom:12px;">Add the products that users can pick from to fill their crate.</p>
                                             <div id="crate-varieties-list" style="display:grid; grid-template-columns: 1fr 1fr; gap:12px; margin-bottom:20px;">
                                                 <!-- Variety cards will be injected here -->
                                             </div>
                                             <button type="button" class="btn btn-primary" onclick="addVarietySlotToPool()" style="width:100%; font-size:12px;">
-                                                <i class="ph ph-magnifying-glass-plus"></i> Add Mango to Pool
+                                                <i class="ph ph-magnifying-glass-plus"></i> Add Product to Selection Pool
                                             </button>
                                         </div>
 
+                                </div>
+
+                                <!-- Custom Size Variations (Formerly Custom Order) -->
+                                <div id="section-custom-order" style="display:none; margin-top:24px;">
+                                    <div style="background:#4b5563; color:white; padding:10px 15px; border-radius:12px 12px 0 0; font-weight:800; display:flex; align-items:center; gap:8px;">
+                                        <i class="ph-bold ph-list-plus"></i> CUSTOM ITEM VARIATIONS
+                                    </div>
+                                    <div id="custom-size-builder-grid" style="display:grid; grid-template-columns: 140px 1fr; gap:16px; background:white; padding:20px; border:1px solid var(--border-color); border-top:0; border-radius:0 0 12px 12px;">
+                                        
+                                        <!-- Left Column: Size/Label -->
+                                        <div id="custom-size-left-list" style="display:flex; flex-direction:column; gap:12px;">
+                                            <label class="form-label" style="font-weight:700; margin-bottom:4px;">Size / Label</label>
+                                            <!-- Inputs will be injected here -->
+                                        </div>
+
+                                        <!-- Right Column: SKU + Price -->
+                                        <div id="custom-size-right-list" style="display:flex; flex-direction:column; gap:12px;">
+                                            <label class="form-label" style="font-weight:700; margin-bottom:4px;">Product ID (SKU) & Price</label>
+                                            <!-- Rows will be injected here -->
+                                        </div>
+
+                                        <div style="grid-column: span 2; margin-top:10px;">
+                                            <button type="button" class="btn btn-outline" onclick="addCustomSizePair()" style="width:100%; border-style:dashed; font-size:13px; color:#4b5563;">
+                                                <i class="ph ph-plus-circle"></i> Add New Manual Variation Row
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
 
