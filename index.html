@@ -32,7 +32,10 @@
 
                 <div class="form-group">
                     <label class="form-label">Password</label>
-                    <input type="password" id="login-password" class="form-control" placeholder="••••••••" required>
+                    <div style="position: relative;">
+                        <input type="password" id="login-password" class="form-control" placeholder="••••••••" required style="padding-right: 48px;">
+                        <i class="ph ph-eye" id="toggle-password" style="position: absolute; right: 12px; top: 50%; transform: translateY(-50%); cursor: pointer; color: #94a3b8; font-size: 1.4rem; z-index: 10; padding: 8px;" onclick="togglePasswordVisibility()"></i>
+                    </div>
                 </div>
                 
                 <div id="login-error-msg" style="color: #ef4444; background: #fee2e2; padding: 12px; border-radius: 12px; font-weight: 600; margin-bottom: 20px; display: none; text-align: center; font-size: 0.85rem;">
@@ -327,12 +330,12 @@
                                 <div class="ap-row-2">
                                     <div class="form-group">
                                         <label class="form-label">Unit</label>
-                                        <select name="unit" class="form-control">
-                                            <option value="kg">Kilo Gram</option>
-                                            <option value="g">Gram</option>
-                                            <option value="L">Litre</option>
-                                            <option value="ml">Millilitre</option>
-                                            <option value="pcs">Pieces</option>
+                                        <select name="unit" class="form-control" onchange="handleUnitChange(this.value)">
+                                            <option value="kg">Kilo Gram (kg)</option>
+                                            <option value="g">Gram (g)</option>
+                                            <option value="L">Litre (L)</option>
+                                            <option value="ml">Millilitre (ml)</option>
+                                            <option value="pcs">Pieces (pcs)</option>
                                         </select>
                                     </div>
                                     <div class="form-group">
@@ -356,8 +359,8 @@
                                 <!-- Standard Pricing & Stock (Hidden if Custom Box) -->
                                 <div id="standard-pricing-section">
                                     <div class="form-group">
-                                        <label class="form-label">Variant Quantities (kg)</label>
-                                        <input type="text" name="variant_quantities" class="form-control" value="3,5,7,10,15" placeholder="e.g. 3,5,7,10,15">
+                                        <label class="form-label" id="variant-quantities-label">Variant Quantities (kg)</label>
+                                        <input type="text" name="variant_quantities" class="form-control" value="1" placeholder="e.g. 1 or 3,5,7,10" oninput="refreshVariantPreview()">
                                         <small style="display:block; margin-top:6px; color:var(--text-muted);">Prices are auto-calculated from base price per kg.</small>
                                         <div id="variant-preview" class="variant-preview-list" style="margin-top:10px;"></div>
                                     </div>
@@ -443,32 +446,64 @@
                                     </div>
                                 </div>
                                 
-                                <!-- Mixed Crate / 4-Variety Builder (Unified) -->
-                                <div id="section-crate-builder" style="display:none; margin-top: 24px; background:#f8fafc; padding:16px; border-radius:12px; border:1px solid #e2e8f0;">
-                                    <label class="form-label" style="font-weight:800; font-size:14px; color:var(--primary-dark); margin-bottom:12px; display:flex; align-items:center; gap:8px;">
-                                        <i class="ph ph-package"></i> Mixed Crate / 4-Variety Builder
-                                    </label>
-                                    
-                                    <div id="size-groups-container" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap:24px; align-items: start;">
-                                        <!-- Groups will be injected here dynamically -->
+                                <!-- Unified Crate / Variety Builder -->
+                                <div id="section-crate-builder" style="display:none; margin-top:24px;">
+                                    <div style="background:var(--primary-light); color:white; padding:10px 15px; border-radius:12px 12px 0 0; font-weight:800; display:flex; align-items:center; gap:8px;">
+                                        <i class="ph-bold ph-magic-wand"></i> CUSTOM MIX BUILDER
                                     </div>
-
-                                    <div style="margin-top: 32px; padding: 24px; background: #ffffff; border-radius: 16px; border: 1px solid #e2e8f0; box-shadow: var(--shadow-sm); display: flex; flex-direction: column; align-items: center; gap: 16px;">
-                                        <div style="text-align: center;">
-                                            <h5 style="margin: 0 0 4px 0; font-size: 14px; color: var(--text-main); font-weight: 800;">Create Custom Weight Category</h5>
-                                            <p style="margin: 0; font-size: 11px; color: var(--text-muted);">Add sections for 7Kg, 10Kg, or any custom box size</p>
-                                        </div>
-                                        <div style="display:flex; gap:12px; align-items:center; background: #f8fafc; padding: 8px 16px; border-radius: 12px; border: 1px solid #f1f5f9;">
-                                            <div style="display:flex; align-items:center; gap:8px;">
-                                                <input type="number" id="new-group-weight" placeholder="Value" style="width:80px; padding:10px; border-radius:8px; border:1px solid #cbd5e1; font-weight: 700; font-size: 14px; text-align: center;">
-                                                <select id="new-group-unit" style="padding:10px; border-radius:8px; border:1px solid #cbd5e1; font-weight: 600; font-size: 13px; background: white; cursor: pointer;">
-                                                    <option value="Kg">Kg</option>
-                                                    <option value="Gm">Gm</option>
-                                                </select>
+                                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:24px; background:white; padding:20px; border:1px solid var(--border-color); border-top:0; border-radius:0 0 12px 12px;">
+                                        
+                                        <!-- Left: Box Sizes & Pricing -->
+                                        <div class="card" style="padding:16px; border:1px solid #e2e8f0; background:#f8fafc; box-shadow:none;">
+                                            <label class="form-label" style="font-weight:800; color:var(--primary-dark); display:flex; align-items:center; gap:8px; margin-bottom:16px;">
+                                                <i class="ph-bold ph-scales"></i> 1. Define Box Sizes & Pricing
+                                            </label>
+                                            <div id="crate-sizes-list" style="display:flex; flex-direction:column; gap:10px; margin-bottom:20px;">
+                                                <!-- Size rows will be injected here -->
                                             </div>
-                                            <div style="width: 1px; height: 30px; background: #e2e8f0;"></div>
-                                            <button type="button" class="btn btn-primary" onclick="addNewWeightGroup()" style="padding:10px 24px; font-size:13px; background:var(--primary); border:none; border-radius:8px; font-weight:800; display:flex; align-items:center; gap:8px; box-shadow: 0 4px 10px rgba(45, 106, 79, 0.2);">
-                                                <i class="ph ph-plus-circle" style="font-size:18px;"></i> CREATE GROUP
+                                            <button type="button" class="btn btn-outline" onclick="addBoxSizeRow()" style="width:100%; border-style:dashed; font-size:12px; background:white;">
+                                                <i class="ph ph-plus-circle"></i> Add New Box Size (e.g. 3kg, 5kg)
+                                            </button>
+                                        </div>
+
+                                        <!-- Right: Variety Pool -->
+                                        <div class="card" style="padding:16px; border:1px solid #e2e8f0; background:#f8fafc; box-shadow:none;">
+                                            <label class="form-label" style="font-weight:800; color:var(--primary-dark); display:flex; align-items:center; gap:8px; margin-bottom:16px;">
+                                                <i class="ph-bold ph-package"></i> 2. Variety Selection Pool
+                                            </label>
+                                            <p style="font-size:10px; color:var(--text-muted); margin-bottom:12px;">Add the products that users can pick from to fill their crate.</p>
+                                            <div id="crate-varieties-list" style="display:grid; grid-template-columns: 1fr 1fr; gap:12px; margin-bottom:20px;">
+                                                <!-- Variety cards will be injected here -->
+                                            </div>
+                                            <button type="button" class="btn btn-primary" onclick="addVarietySlotToPool()" style="width:100%; font-size:12px;">
+                                                <i class="ph ph-magnifying-glass-plus"></i> Add Product to Selection Pool
+                                            </button>
+                                        </div>
+
+                                </div>
+
+                                <!-- Custom Size Variations (Formerly Custom Order) -->
+                                <div id="section-custom-order" style="display:none; margin-top:24px;">
+                                    <div style="background:#4b5563; color:white; padding:10px 15px; border-radius:12px 12px 0 0; font-weight:800; display:flex; align-items:center; gap:8px;">
+                                        <i class="ph-bold ph-list-plus"></i> CUSTOM ITEM VARIATIONS
+                                    </div>
+                                    <div id="custom-size-builder-grid" style="display:grid; grid-template-columns: 140px 1fr; gap:16px; background:white; padding:20px; border:1px solid var(--border-color); border-top:0; border-radius:0 0 12px 12px;">
+                                        
+                                        <!-- Left Column: Size/Label -->
+                                        <div id="custom-size-left-list" style="display:flex; flex-direction:column; gap:12px;">
+                                            <label class="form-label" style="font-weight:700; margin-bottom:4px;">Size / Label</label>
+                                            <!-- Inputs will be injected here -->
+                                        </div>
+
+                                        <!-- Right Column: SKU + Price -->
+                                        <div id="custom-size-right-list" style="display:flex; flex-direction:column; gap:12px;">
+                                            <label class="form-label" style="font-weight:700; margin-bottom:4px;">Product ID (SKU) & Price</label>
+                                            <!-- Rows will be injected here -->
+                                        </div>
+
+                                        <div style="grid-column: span 2; margin-top:10px;">
+                                            <button type="button" class="btn btn-outline" onclick="addCustomSizePair()" style="width:100%; border-style:dashed; font-size:13px; color:#4b5563;">
+                                                <i class="ph ph-plus-circle"></i> Add New Manual Variation Row
                                             </button>
                                         </div>
                                     </div>
@@ -491,13 +526,21 @@
                                     <label class="form-label ap-journey-label">
                                         <i class="ph ph-leaf"></i> OUR HARVEST JOURNEY
                                     </label>
-                                    <textarea name="harvest_journey" class="form-control ap-textarea" rows="4" placeholder="Tell the story of where this product comes from, how it's grown and harvested..."></textarea>
+                                    <p style="font-size: 10px; color: var(--text-muted); margin-bottom: 8px;">Enter one step per line. Use <b>Topic: Description</b> format to bold labels.</p>
+                                    <textarea name="harvest_journey" class="form-control ap-textarea" rows="4" 
+                                        oninput="updateLivePreviews()"
+                                        placeholder="Hand-Picked: Each fruit is individually assessed...&#10;Pesticide-Free: Traditional water-cleaning...&#10;Eco-Packaging: Shipped in sustainable crates..."></textarea>
+                                    <div id="harvest-journey-preview" style="margin-top:12px;"></div>
                                 </div>
 
                                 <!-- About This Item -->
                                 <div class="form-group">
                                     <label class="form-label">About This Item</label>
-                                    <textarea name="about_item" class="form-control ap-textarea" rows="4" placeholder="Key highlights, health benefits, packaging details..."></textarea>
+                                    <p style="font-size: 10px; color: var(--text-muted); margin-bottom: 8px;">Enter one point per line. Use <b>Feature: Detail</b> format to bold titles.</p>
+                                    <textarea name="about_item" class="form-control ap-textarea" rows="4" 
+                                        oninput="updateLivePreviews()"
+                                        placeholder="100% Organic: Directly sourced from our estates...&#10;Hand-Harvested: Assessed for peak maturity...&#10;Zero Adulteration: Lab checks ensure absolute safety..."></textarea>
+                                    <div id="about-item-preview" style="margin-top:12px;"></div>
                                 </div>
 
                             </div>

@@ -3,18 +3,30 @@ const supabaseUrl = 'https://jztreusepxilnfqffwka.supabase.co';
 const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp6dHJldXNlcHhpbG5mcWZmd2thIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ4NzA5OTUsImV4cCI6MjA5MDQ0Njk5NX0.AXaOi_ax6esifM7DzwVjNXQrm3XLNPnzT_0yQWm6ahY';
 let supabaseClient = null;
 
-function initSupabase() {
-    if (supabaseClient) return true;
-    if (window.supabase && window.supabase.createClient) {
-        supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
-        console.log('✅ Supabase initialized successfully');
-        return true;
+// --- Cookie Helpers ---
+const CookieManager = {
+    set: function(name, value, days = 7) {
+        if (window.location.protocol === 'file:') { localStorage.setItem(name, value); return; }
+        const date = new Date();
+        date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
+        document.cookie = name + "=" + (value || "") + "; expires=" + date.toUTCString() + "; path=/; SameSite=Lax";
+        localStorage.setItem(name, value);
+    },
+    get: function(name) {
+        if (window.location.protocol === 'file:') return localStorage.getItem(name);
+        const nameEQ = name + "=";
+        const ca = document.cookie.split(';');
+        for (let i = 0; i < ca.length; i++) {
+            let c = ca[i].trim();
+            if (c.indexOf(nameEQ) === 0) return c.substring(nameEQ.length);
+        }
+        return localStorage.getItem(name);
+    },
+    erase: function(name) {
+        document.cookie = name + '=; Max-Age=-99999999; path=/; SameSite=Lax';
+        localStorage.removeItem(name);
     }
-    return false;
-}
-
-// Try immediately
-initSupabase();
+};
 
 // --- Global State ---
 let allProducts = [];
@@ -24,6 +36,7 @@ let currentOrderFilter = 'all';
 let notifications = [];
 let currentModalOrder = null;
 
+<<<<<<< HEAD
 // --- Boot: wait for Supabase then load data ---
 document.addEventListener('DOMContentLoaded', () => {
     function tryInit() {
@@ -102,39 +115,101 @@ async function checkSession() {
         localStorage.removeItem('adminLoggedIn');
         showLoginScreen();
     }
+=======
+// --- UI Helpers: Show/Hide dashboard or login ---
+function showAdminContent() {
+    const loginScreen = document.getElementById('login-screen');
+    const sidebar     = document.getElementById('sidebar');
+    const mainWrapper = document.getElementById('main-wrapper');
+    document.body.classList.remove('show-login');
+    if (loginScreen) loginScreen.style.display = 'none';
+    if (sidebar)     sidebar.style.display     = 'flex';
+    if (mainWrapper) mainWrapper.style.display = 'flex';
+>>>>>>> b5c4793e2981e0c0248f51aa16c66caf10a0840b
 }
 
 function showLoginScreen() {
     const loginScreen = document.getElementById('login-screen');
-    const sidebar = document.getElementById('sidebar');
+    const sidebar     = document.getElementById('sidebar');
     const mainWrapper = document.getElementById('main-wrapper');
-    if (loginScreen) loginScreen.style.display = 'flex';
-    if (sidebar) sidebar.style.display = 'none';
-    if (mainWrapper) mainWrapper.style.display = 'none';
     document.body.classList.add('show-login');
+    if (loginScreen) loginScreen.style.display = 'flex';
+    if (sidebar)     sidebar.style.display     = 'none';
+    if (mainWrapper) mainWrapper.style.display = 'none';
 }
 
+// ─────────────────────────────────────────────────────────
+//  BOOT — runs AFTER DOM is ready so elements always exist
+// ─────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+    function tryInit() {
+        if (!window.supabase || !window.supabase.createClient) {
+            // Supabase CDN not loaded yet — retry in 200ms
+            setTimeout(tryInit, 200);
+            return;
+        }
 
-function showAdminContent() {
-    console.log('🏠 showAdminContent called, supabaseClient:', supabaseClient ? 'ready' : 'NULL');
-    
-    const loginScreen = document.getElementById('login-screen');
-    const sidebar = document.getElementById('sidebar');
-    const mainWrapper = document.getElementById('main-wrapper');
+        // Init client — use DEFAULT storage key so the JWT is found on refresh
+        supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey, {
+            auth: {
+                persistSession: true,
+                autoRefreshToken: true,
+                detectSessionInUrl: false
+            }
+        });
+        console.log('✅ Supabase client ready');
 
-    if (loginScreen) loginScreen.style.display = 'none';
-    if (sidebar) sidebar.style.display = 'flex';
-    if (mainWrapper) mainWrapper.style.display = 'flex';
+        // ① On page load — check if a session is already stored
+        supabaseClient.auth.getSession().then(({ data }) => {
+            if (data.session) {
+                console.log('🔑 Session restored on refresh');
+                CookieManager.set('adminLoggedIn', 'true');
+                showAdminContent();
+                loadDashboardData();
+                handleRouting();
+            } else {
+                console.log('🔒 No session — showing login');
+                CookieManager.erase('adminLoggedIn');
+                showLoginScreen();
+            }
+        });
+
+        // ② Listen for live changes (login, logout, token refresh)
+        supabaseClient.auth.onAuthStateChange((event, session) => {
+            console.log('🔄 Auth event:', event);
+            if (event === 'SIGNED_IN') {
+                CookieManager.set('adminLoggedIn', 'true');
+                showAdminContent();
+                loadDashboardData();
+                handleRouting();
+            } else if (event === 'SIGNED_OUT') {
+                CookieManager.erase('adminLoggedIn');
+                showLoginScreen();
+            }
+            // TOKEN_REFRESHED keeps session alive silently — no UI change needed
+        });
+    }
+
+    tryInit();
+});
+
+
+
+function togglePasswordVisibility() {
+    const passwordInput = document.getElementById('login-password');
+    const eyeIcon       = document.getElementById('toggle-password');
     
-    document.body.classList.remove('show-login');
-    
-    if (supabaseClient) {
-        console.log('📊 Calling renderDashboard, fetchDeliveryConfig, loadCategoryOptions...');
-        renderDashboard();
-        fetchDeliveryConfig();
-        loadCategoryOptions();
-    } else {
-        console.error('❌ showAdminContent: supabaseClient is NULL, data will not load!');
+    if (passwordInput && eyeIcon) {
+        if (passwordInput.type === 'password') {
+            passwordInput.type = 'text';
+            // Remove both variants and add the correct one
+            eyeIcon.classList.remove('ph-eye', 'ph-eye-slash');
+            eyeIcon.classList.add('ph-eye-slash');
+        } else {
+            passwordInput.type = 'password';
+            eyeIcon.classList.remove('ph-eye-slash', 'ph-eye');
+            eyeIcon.classList.add('ph-eye');
+        }
     }
 }
 
@@ -149,7 +224,7 @@ async function handleLogin() {
 
     if (!email || !password) return;
 
-    // Strict Restriction: Only allow the official admin email
+    // Only allow the official admin email
     if (email !== 'info.farmmily@gmail.com') {
         if (errorEl) {
             errorEl.style.display = 'block';
@@ -158,46 +233,40 @@ async function handleLogin() {
         return;
     }
 
+    if (errorEl) errorEl.style.display = 'none';
+
     try {
-        if(btn) {
+        if (btn) {
             btn.disabled = true;
             btn.innerHTML = '<i class="ph ph-circle-notch spinner-white"></i> Authenticating...';
         }
-        
-        const { data, error } = await supabaseClient.auth.signInWithPassword({
-            email: email,
-            password: password
-        });
 
+        const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
         if (error) throw error;
 
-        localStorage.setItem('adminLoggedIn', 'true');
-        showAdminContent();
-        navigateTo('dashboard');
+        // onAuthStateChange SIGNED_IN event will fire and call showAdminContent() automatically
         showToast('Welcome back, Admin!', 'success');
-        
+
     } catch (err) {
         console.error('❌ Login Error:', err);
         if (errorEl) {
             errorEl.style.display = 'block';
             errorEl.innerHTML = `<i class="ph ph-warning-circle"></i> ${err.message || 'Invalid credentials'}`;
         }
-        if(btn) {
+        if (btn) {
             btn.disabled = false;
             btn.innerHTML = '<i class="ph ph-sign-in"></i> Login to Dashboard';
         }
     }
 }
 
-async function handleLogout() {
-    await supabaseClient.auth.signOut();
-    localStorage.removeItem('adminLoggedIn');
-    showLoginScreen();
-    showToast('Logged out successfully');
-}
 
-function handleLogout() {
-    localStorage.removeItem('adminLoggedIn');
+async function handleLogout() {
+    try {
+        if (supabaseClient) await supabaseClient.auth.signOut();
+    } catch (e) {}
+    
+    CookieManager.erase('adminLoggedIn');
     location.reload();
 }
 
@@ -386,9 +455,37 @@ function syncUrl(pageId) {
 }
 
 function handleRouting() {
+<<<<<<< HEAD
     const hash = window.location.hash.replace('#', '').toLowerCase();
     const pageId = hash || 'dashboard';
     navigateTo(pageId, false);
+=======
+    console.log('🔗 handleRouting triggered');
+    const urlParams = new URLSearchParams(window.location.search);
+    const pageParam = urlParams.get('page');
+    const path = window.location.pathname;
+
+    let targetPage = 'dashboard';
+
+    if (pageParam) {
+        targetPage = pageParam;
+    } else {
+        // Try to infer from path if using clean URLs
+        const lastPart = path.split('/').pop();
+        if (lastPart && lastPart !== 'index.html' && lastPart !== '') {
+            targetPage = lastPart;
+        }
+    }
+
+    if (CookieManager.get('adminLoggedIn') === 'true') {
+        navigateTo(targetPage, false);
+    } else {
+        // If not logged in, keep login screen but maybe track where they wanted to go
+        if (targetPage !== 'dashboard') {
+            sessionStorage.setItem('redirectAfterLogin', targetPage);
+        }
+    }
+>>>>>>> b5c4793e2981e0c0248f51aa16c66caf10a0840b
 }
 
 window.onpopstate = function(event) {
@@ -606,17 +703,75 @@ function getProductVariantQuantities(product) {
         return parseVariantQuantities(product.variant_quantities);
     }
 
+    // Default for Single Products if no variants set
+    if (product?.product_type === 'standard' || !product?.product_type) {
+        // Return nothing if we want to rely on the unit-only display
+        return [];
+    }
+
     return [];
 }
 
 function buildVariantPreviewHtml(basePricePerKg, quantities) {
+    const unitSelect = document.querySelector('#product-form select[name="unit"]');
+    const unit = unitSelect ? unitSelect.value : 'kg';
+
     if (!quantities.length) {
-        return `<span style="font-size:0.8rem; color:var(--text-muted);">Add quantities like 3,5,7,10,15</span>`;
+        return `<span style="font-size:0.8rem; color:var(--text-muted);">Add quantities (separated by commas)</span>`;
     }
 
     return quantities.map(qty => `
-        <span class="variant-pill">${qty}kg <span>${formatCurrency(calculateVariantPrice(basePricePerKg, qty))}</span></span>
+        <span class="variant-pill">${qty}${unit} <span>${formatCurrency(calculateVariantPrice(basePricePerKg, qty))}</span></span>
     `).join('');
+}
+
+function updateLivePreviews() {
+    const journeyText = document.querySelector('textarea[name="harvest_journey"]')?.value || '';
+    const aboutText = document.querySelector('textarea[name="about_item"]')?.value || '';
+
+    const journeyPreview = document.getElementById('harvest-journey-preview');
+    const aboutPreview = document.getElementById('about-item-preview');
+
+    if (journeyPreview && journeyText) {
+        const lines = journeyText.split('\n').filter(l => l.trim());
+        journeyPreview.innerHTML = `
+            <div class="user-side-preview">
+                <h6 style="color:var(--primary-dark); font-size:11px; margin-bottom:12px; text-transform:uppercase; letter-spacing:1px; text-align:center;">OUR HARVEST JOURNEY</h6>
+                ${lines.map((l, index) => {
+                    const [title, ...rest] = l.split(':');
+                    return `
+                        <div style="display:flex; gap:12px; margin-bottom:16px; align-items:flex-start;">
+                            <span style="background:var(--primary-light); color:var(--primary); width:24px; height:24px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:800; flex-shrink:0;">${index + 1}</span>
+                            <div>
+                                <div style="font-weight:700; color:var(--text-main); font-size:12px; line-height:1.4;">${title.trim()}</div>
+                                <div style="font-size:11px; color:var(--text-muted); line-height:1.5;">${rest.join(':').trim()}</div>
+                            </div>
+                        </div>
+                    `;
+                }).join('')}
+            </div>
+        `;
+    } else if (journeyPreview) journeyPreview.innerHTML = '';
+
+    if (aboutPreview && aboutText) {
+        const lines = aboutText.split('\n').filter(l => l.trim());
+        aboutPreview.innerHTML = `
+            <div class="user-side-preview">
+                <h6 style="color:var(--text-main); font-size:13px; margin-bottom:12px; font-weight:800;">About this item</h6>
+                <ul style="padding:0; margin:0; list-style:none;">
+                    ${lines.map(l => {
+                        const [title, ...rest] = l.split(':');
+                        return `
+                            <li style="font-size:11px; color:var(--text-muted); margin-bottom:8px; line-height:1.5; display:flex; align-items:flex-start; gap:8px;">
+                                <span style="font-size:14px; margin-top:-2px;">•</span>
+                                <div><b style="color:var(--text-main);">${title.trim()}${rest.length ? ':' : ''}</b> ${rest.join(':').trim()}</div>
+                            </li>
+                        `;
+                    }).join('')}
+                </ul>
+            </div>
+        `;
+    } else if (aboutPreview) aboutPreview.innerHTML = '';
 }
 
 function refreshVariantPreview() {
@@ -663,7 +818,7 @@ async function upsertVariantsWithFallback(payload) {
 }
 
 async function saveProductVariants(productId, rawQuantities, pricing = {}) {
-    const quantities = parseVariantQuantities(rawQuantities);
+    const quantities = Array.isArray(rawQuantities) ? rawQuantities : parseVariantQuantities(rawQuantities);
     const labels = quantities.map(qty => (typeof qty === 'object') ? qty.label : `${qty}kg`);
     const basePricePerKg = parseFloat(pricing.basePricePerKg || 0);
     const compareAtPerKg = parseFloat(pricing.compareAtPerKg || 0);
@@ -1210,15 +1365,26 @@ function buildProductsTable(products) {
         const isOutOfStock = p.in_stock === false;
         const basePrice = getBasePricePerKg(p);
         const variantQuantities = getProductVariantQuantities(p);
+        const unit = p.unit || 'kg';
         
         let variantSummary = '';
         if (p.variants && p.variants.length > 0) {
             variantSummary = p.variants.map(v => `<span class="ap-variant-pill">${v.label} - ${formatCurrency(v.price || calculateVariantPrice(basePrice, v.quantity_kg))}</span>`).join('');
         } else if (variantQuantities.length) {
-            variantSummary = variantQuantities.map(qty => `<span class="ap-variant-pill">${qty}kg - ${formatCurrency(calculateVariantPrice(basePrice, qty))}</span>`).join('');
+            variantSummary = variantQuantities.map(qty => `<span class="ap-variant-pill">${qty}${unit} - ${formatCurrency(calculateVariantPrice(basePrice, qty))}</span>`).join('');
         } else {
-            variantSummary = '<span class="ap-variant-pill" style="opacity:0.6">No variants</span>';
+            // SINGLE PRODUCT FALLBACK: Show 1 unit price
+            variantSummary = `<span class="ap-variant-pill">1 ${unit} - ${formatCurrency(basePrice)}</span>`;
         }
+
+        const typeLabels = {
+            'standard': 'Single Product',
+            'multi': 'Multi Product',
+            'custom_box': 'Custom Mix Crate',
+            'custom': 'Custom Variations',
+            'corporate_box': 'Corporate Box'
+        };
+        const typeLabel = typeLabels[p.product_type] || (p.product_type || 'Single Product').replace(/_/g, ' ');
 
         const reviewCount = p.review_count ?? p.rating_count ?? 0;
         const averageRating = Number(p.avg_rating ?? p.rating ?? 0);
@@ -1239,9 +1405,9 @@ function buildProductsTable(products) {
                         </div>
                         <div style="display:flex; gap:6px; margin-top:6px; flex-wrap: wrap;">
                             <span class="ap-badge-sm" style="background:#e0f2fe; color:#0369a1">${cat?.name || 'Uncategorized'}</span>
-                            <span class="ap-badge-sm" style="background:#f3f4f6; color:#4b5563">${(p.product_type || 'standard').replace(/_/g, ' ')}</span>
+                            <span class="ap-badge-sm" style="background:#f3f4f6; color:#4b5563">${typeLabel}</span>
                             <span class="ap-badge-sm" style="background:#fef3c7; color:#92400e; font-weight:700;">PRIO: ${p.priority ?? 100}</span>
-                            ${variantQuantities.map(qty => `<span class="ap-badge-sm" style="background:#ecfdf5; color:#065f46; font-weight:600;">${qty}${qty.toString().match(/[a-zA-Z]/) ? '' : 'kg'}</span>`).join('')}
+                            ${variantQuantities.length ? variantQuantities.map(qty => `<span class="ap-badge-sm" style="background:#ecfdf5; color:#065f46; font-weight:600;">${qty}${qty.toString().match(/[a-zA-Z]/) ? '' : unit}</span>`).join('') : `<span class="ap-badge-sm" style="background:#f3f4f6; color:#64748b; font-weight:600;">1 ${unit}</span>`}
                         </div>
                     </div>
                 </div>
@@ -1250,7 +1416,7 @@ function buildProductsTable(products) {
             <!-- Pricing & Variants -->
             <td>
                 <div style="font-weight:700; color:var(--text-main); margin-bottom:4px">
-                    ${formatCurrency(basePrice)}<span style="font-size:0.75rem; color:#64748b; font-weight:500;">/kg base</span>
+                    ${formatCurrency(basePrice)}<span style="font-size:0.75rem; color:#64748b; font-weight:500;">/${unit} base</span>
                 </div>
                 <div style="display:flex; flex-wrap:wrap; gap:4px; max-width: 250px;">
                     ${variantSummary}
@@ -2343,12 +2509,17 @@ function resetProductForm() {
     if (btn) btn.innerHTML = '<i class="ph ph-floppy-disk"></i> Save Product';
 
     // Reset Crate Builder Groups
-    const groupContainer = document.getElementById('size-groups-container');
-    if (groupContainer) {
-        groupContainer.innerHTML = '';
-        // Re-create default 3kg and 5kg groups
-        addNewWeightGroup(3, 'Kg');
-        addNewWeightGroup(5, 'Kg');
+    const sizesList = document.getElementById('crate-sizes-list');
+    const varietyList = document.getElementById('crate-varieties-list');
+    if (sizesList) {
+        sizesList.innerHTML = '';
+        addBoxSizeRow(3, 'Kg', 0);
+        addBoxSizeRow(5, 'Kg', 0);
+    }
+    if (varietyList) {
+        varietyList.innerHTML = '';
+        addVarietySlotToPool();
+        addVarietySlotToPool();
     }
 
     if (form?.elements['product_type']) {
@@ -2358,6 +2529,20 @@ function resetProductForm() {
     if (form?.elements['priority']) form.elements['priority'].value = '100';
     if (form?.elements['variant_quantities']) form.elements['variant_quantities'].value = '3,5,7,10,15';
     if (form?.elements['show_on_shop']) form.elements['show_on_shop'].checked = true;
+
+    // Reset Custom Sizing Pairs
+    const customLeft = document.getElementById('custom-size-left-list');
+    const customRight = document.getElementById('custom-size-right-list');
+    if (customLeft) {
+        Array.from(customLeft.children).forEach(child => {
+            if (child.tagName !== 'LABEL') child.remove();
+        });
+    }
+    if (customRight) {
+        Array.from(customRight.children).forEach(child => {
+            if (child.tagName !== 'LABEL') child.remove();
+        });
+    }
     
     // Set default values for ratings
     if (form?.elements['rating']) form.elements['rating'].value = '5.0';
@@ -2366,90 +2551,111 @@ function resetProductForm() {
     refreshVariantPreview();
 }
 
+function handleUnitChange(unit) {
+    const variantLabel = document.getElementById('variant-quantities-label');
+    if (variantLabel) variantLabel.innerHTML = `Variant Quantities (${unit})`;
+    refreshVariantPreview();
+}
+
 /**
  * Handles switching between product types (Custom Size / Multi Product / etc.)
  * Shows/hides relevant form sections.
  */
 function handleProductTypeChange(type) {
-    const crateBuilder = document.getElementById('section-crate-builder');
-    if (crateBuilder) crateBuilder.style.display = (type === 'custom_box') ? 'block' : 'none';
-    
-    // Hide standard base price section if custom box
-    const standardPricing = document.getElementById('standard-pricing-section');
-    if (standardPricing) standardPricing.style.display = (type === 'custom_box') ? 'none' : 'block';
-}
+    const sectionStandard = document.getElementById('standard-pricing-section');
+    const sectionCrate    = document.getElementById('section-crate-builder');
+    const sectionCustom   = document.getElementById('section-custom-order');
 
-function addNewWeightGroup(val, unit) {
-    const groupContainer = document.getElementById('size-groups-container');
-    if (!groupContainer) return;
+    // Default hide all variant sections
+    if(sectionStandard) sectionStandard.style.display = 'none';
+    if(sectionCrate)    sectionCrate.style.display    = 'none';
+    if(sectionCustom)   sectionCustom.style.display   = 'none';
 
-    if (!val) {
-        val = document.getElementById('new-group-weight')?.value;
-        unit = document.getElementById('new-group-unit')?.value || 'Kg';
-    }
-    if (!val) return;
-
-    const groupId = `group-${val}${unit}`.replace(/[^a-zA-Z0-9]/g, '');
-    if (document.getElementById(groupId)) {
-        showToast('Group already exists', 'warning');
-        return;
+    // Build the visibility based on type
+    if (type === 'standard' || type === 'multi_kg' || type === 'multi' || type === 'corporate_box') {
+        if(sectionStandard) sectionStandard.style.display = 'block';
+    } else if (type === 'custom_box') {
+        if(sectionCrate)    sectionCrate.style.display    = 'block';
+    } else if (type === 'custom') {
+        if(sectionCustom)   sectionCustom.style.display   = 'block';
     }
 
-    const groupDiv = document.createElement('div');
-    groupDiv.id = groupId;
-    groupDiv.className = 'size-group-section';
-    groupDiv.innerHTML = `
-        <div class="crate-group-header">
-            <h4 class="crate-group-title">
-                <i class="ph ph-package" style="color:var(--primary)"></i> ${val}${unit} Variety List
-            </h4>
-            <button type="button" class="crate-slot-remove-btn" onclick="confirmDeleteGroup(this)" style="width:26px; height:26px;" title="Remove this entire weight category">
-                <i class="ph ph-trash"></i>
-            </button>
-        </div>
-        <div class="crate-slots-list" style="display:flex; flex-direction:column; gap:12px;"></div>
-        <button type="button" class="btn-crate-add" onclick="addCrateSlotToGroup('${groupId}', '${val}', '${unit}')">+ Add ${val}${unit} Variety</button>
-    `;
+    handleUnitChange(document.querySelector('#product-form select[name="unit"]')?.value || 'kg');
 
-    groupContainer.appendChild(groupDiv);
-    
-    // Add 2 initial slots
-    addCrateSlotToGroup(groupId, val, unit);
-    addCrateSlotToGroup(groupId, val, unit);
-
-    if (document.getElementById('new-group-weight')) document.getElementById('new-group-weight').value = '';
-}
-
-function confirmDeleteGroup(btn) {
-    if (confirm('Are you sure you want to remove this entire weight category and all its products?')) {
-        btn.closest('.size-group-section').remove();
-        showToast('Weight Group removed', 'info');
+    // Intelligent defaults for fresh products (if not editing)
+    if (!editingProductId) {
+        const variantInput = document.querySelector('#product-form input[name="variant_quantities"]');
+        if (variantInput) {
+            if (type === 'standard') variantInput.value = '1';
+            else if (type === 'multi') variantInput.value = '3,5,7,10,15';
+            refreshVariantPreview();
+        }
     }
 }
 
-function addCrateSlotToGroup(groupId, val, unit) {
-    const list = document.querySelector(`#${groupId} .crate-slots-list`);
+function addBoxSizeRow(val, unit, price, sku) {
+    const list = document.getElementById('crate-sizes-list');
     if (!list) return;
 
-    const slotCount = list.querySelectorAll('.crate-slot').length + 1;
+    const row = document.createElement('div');
+    row.style.display = 'flex';
+    row.style.gap = '8px';
+    row.style.alignItems = 'center';
+    row.style.marginBottom = '8px';
+    row.innerHTML = `
+        <input type="number" class="form-control size-val" value="${val || ''}" placeholder="Qty" style="width:70px; font-weight:700;">
+        <select class="form-control size-unit" style="width:75px; font-size:12px;">
+            <option value="kg" ${unit?.toLowerCase() === 'kg' ? 'selected' : ''}>kg</option>
+            <option value="g" ${unit?.toLowerCase() === 'g' ? 'selected' : ''}>g</option>
+            <option value="pcs" ${unit?.toLowerCase() === 'pcs' ? 'selected' : ''}>pcs</option>
+        </select>
+        <div style="position:relative; flex:1;">
+            <span style="position:absolute; left:8px; top:50%; transform:translateY(-50%); font-size:10px; color:#94a3b8; font-weight:700;">₹</span>
+            <input type="number" class="form-control size-price" value="${price || ''}" placeholder="Price" style="padding-left:20px;">
+        </div>
+        <input type="text" class="form-control size-sku" value="${sku || ''}" placeholder="ID/SKU" style="width:90px; font-size:11px;">
+        <button type="button" class="btn btn-outline" onclick="this.parentElement.remove()" style="padding:6px; color:#ef4444; border-color:#fee2e2; background:white;"><i class="ph ph-trash"></i></button>
+    `;
+    list.appendChild(row);
+}
+
+function addVarietySlotToPool(skuValue) {
+    const list = document.getElementById('crate-varieties-list');
+    if (!list) return;
+
     const slot = document.createElement('div');
-    slot.className = 'crate-slot';
+    slot.className = 'crate-slot variety-pool-item';
+    slot.style.margin = '0';
     slot.innerHTML = `
-        <span style="font-size:10px; font-weight:800; color:#64748b; display:block; margin-bottom:8px; text-transform:uppercase;">Variety ${slotCount} (${val}${unit})</span>
-        <button type="button" class="crate-slot-remove-btn" onclick="this.parentElement.remove()" title="Remove this variety">
-            <i class="ph ph-x" style="font-size:12px;"></i>
-        </button>
-        <input type="text" class="form-control custom-var-id" placeholder="Search Product SKU / Name..." style="margin-bottom:10px; font-size:12px;">
-        <div style="display:flex; gap:8px;">
-            <input type="hidden" class="custom-var-size" value="${val}">
-            <input type="hidden" class="custom-var-unit" value="${unit}">
-            <div style="position:relative; flex:1;">
-                <span style="position:absolute; left:8px; top:50%; transform:translateY(-50%); font-size:10px; color:#94a3b8; font-weight:700;">₹</span>
-                <input type="number" class="form-control custom-var-price" placeholder="0.00" style="padding-left:20px; font-size:12px;">
+        <div class="variety-display-header" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+            <span style="font-size:10px; font-weight:800; color:#64748b; text-transform:uppercase;">Pool Variety</span>
+            <button type="button" class="crate-slot-remove-btn" onclick="this.parentElement.parentElement.remove()" style="position:static; padding:4px;"><i class="ph ph-trash"></i></button>
+        </div>
+        
+        <div class="variety-product-preview" style="display:none; align-items:center; gap:8px; background:#f8fafc; padding:6px; border-radius:6px; border:1px solid #e2e8f0; cursor:pointer;">
+            <img src="" class="preview-img" style="width:24px; height:24px; border-radius:4px; object-fit:cover;">
+            <div style="flex:1; overflow:hidden;">
+                <div class="preview-name" style="font-size:11px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"></div>
             </div>
         </div>
+
+        <input type="text" class="form-control custom-var-id" value="${skuValue || ''}" placeholder="Search Product / Variety..." style="font-size:11px;">
     `;
     list.appendChild(slot);
+    
+    if (skuValue) {
+        // Trigger preview load if SKU provided
+        const productData = allProducts.find(p => p.sku === skuValue);
+        if (productData) {
+            const preview = slot.querySelector('.variety-product-preview');
+            const input = slot.querySelector('.custom-var-id');
+            preview.style.display = 'flex';
+            preview.querySelector('.preview-img').src = productData.image_url || '';
+            preview.querySelector('.preview-name').innerText = productData.name;
+            input.style.display = 'none';
+            preview.onclick = () => { preview.style.display='none'; input.style.display='block'; input.focus(); };
+        }
+    }
 }
 
 function addCustomSizePair() {
@@ -2567,6 +2773,41 @@ function generateProductSku(name) {
     return `${abbr}-${String(nextNum).padStart(3, '0')}`;
 }
 
+function addCustomSizePair(labelVal, skuVal, priceVal) {
+    const leftList = document.getElementById('custom-size-left-list');
+    const rightList = document.getElementById('custom-size-right-list');
+
+    if (!leftList || !rightList) return;
+
+    const rowId = 'row-' + Date.now() + Math.floor(Math.random() * 1000);
+
+    // Add exactly one empty row to left side
+    const lInput = document.createElement('input');
+    lInput.type = 'text';
+    lInput.className = 'form-control custom-var-size';
+    lInput.placeholder = 'e.g. 10Kg';
+    lInput.value = labelVal || '';
+    lInput.dataset.rowId = rowId;
+    leftList.appendChild(lInput);
+
+    // Add corresponding row to right side
+    const rDiv = document.createElement('div');
+    rDiv.style.display = 'flex';
+    rDiv.style.gap = '12px';
+    rDiv.className = 'custom-var-row';
+    rDiv.dataset.rowId = rowId;
+    rDiv.innerHTML = `
+        <input type="text" class="form-control custom-var-id" placeholder="ID (e.g. BANG-10)" value="${skuVal || ''}" style="flex:1;">
+        <input type="number" class="form-control custom-var-price" placeholder="Price (₹)" value="${priceVal || ''}" style="width:120px;">
+        <button type="button" class="btn btn-outline" onclick="removeCustomSizePair('${rowId}')" style="padding:6px; color:#ef4444; border-color:#fee2e2; flex-shrink:0;"><i class="ph ph-trash"></i></button>
+    `;
+    rightList.appendChild(rDiv);
+}
+
+function removeCustomSizePair(rowId) {
+    document.querySelectorAll(`[data-row-id="${rowId}"]`).forEach(el => el.remove());
+}
+
 async function editProduct(id) {
     const p = allProducts.find(x => x.id == id);
     if(!p) { showToast('Product not found. Please refresh the page.', 'error'); return; }
@@ -2597,41 +2838,55 @@ async function editProduct(id) {
     form.elements['is_featured'].checked = !!p.is_featured;
     form.elements['show_on_home'].checked = !!p.show_on_home;
     form.elements['show_on_shop'].checked = p.show_on_shop !== false;
+    form.elements['sku'].value = p.sku || '';
+    form.elements['harvest_journey'].value = p.harvest_journey || '';
+    form.elements['about_item'].value = p.about_item || '';
     
     // Star Rating Fields
     form.elements['rating'].value = p.rating || '5.0';
-    form.elements['review_count'].value = p.review    // Load Crate Builder Slots if applicable
+    form.elements['review_count'].value = p.review_count || 0;
+
+    // Load Crate Builder Slots if applicable
     if (pType === 'custom_box') {
         const { data: variants } = await supabaseClient.from('product_variants').select('*').eq('product_id', id).order('id', { ascending: true });
         
         if (variants && variants.length > 0) {
-            const groupContainer = document.getElementById('size-groups-container');
-            if(groupContainer) groupContainer.innerHTML = ''; // Clear existing
+            const sizesList = document.getElementById('crate-sizes-list');
+            const varietyList = document.getElementById('crate-varieties-list');
+            if (sizesList) sizesList.innerHTML = '';
+            if (varietyList) varietyList.innerHTML = '';
 
+            const addedPoolSkus = new Set();
             variants.forEach(v => {
                 const label = v.label || '';
-                // Split label (e.g. "7Kg") into value and unit
-                const match = label.match(/^(\d+)(.*)$/);
-                const val = match ? match[1] : '3';
-                const unit = match ? match[2] : 'Kg';
-
-                const groupId = `group-${val}${unit}`.replace(/[^a-zA-Z0-9]/g, '');
-                if (!document.getElementById(groupId)) {
-                    addNewWeightGroup(val, unit);
+                if (label.includes('VarietyPool:')) {
+                    const sku = v.sku || label.split('VarietyPool:')[1]?.trim();
+                    if (sku && !addedPoolSkus.has(sku)) {
+                        addVarietySlotToPool(sku);
+                        addedPoolSkus.add(sku);
+                    }
+                } else {
+                    // It's a weight option
+                    const match = label.match(/^(\d+)([a-zA-Z]+)/);
+                    if (match) {
+                        addBoxSizeRow(match[1], match[2], v.price, v.sku);
+                    }
                 }
-
-                const list = document.querySelector(`#${groupId} .crate-slots-list`);
-                // Find first slot in this group without an ID, or add new one
-                let targetSlot = Array.from(list.querySelectorAll('.crate-slot')).find(s => !s.querySelector('.custom-var-id').value);
-                if (!targetSlot) {
-                    addCrateSlotToGroup(groupId, val, unit);
-                    targetSlot = list.lastElementChild;
-                }
-
-                if (targetSlot) {
-                    targetSlot.querySelector('.custom-var-id').value = v.sku || '';
-                    targetSlot.querySelector('.custom-var-price').value = v.price || '';
-                }
+            });
+        }
+    } else if (pType === 'custom') {
+        const { data: variants } = await supabaseClient.from('product_variants').select('*').eq('product_id', id).order('id', { ascending: true });
+        if (variants && variants.length > 0) {
+            const leftList = document.getElementById('custom-size-left-list');
+            const rightList = document.getElementById('custom-size-right-list');
+            if (leftList) {
+                Array.from(leftList.children).forEach(child => { if (child.tagName !== 'LABEL') child.remove(); });
+            }
+            if (rightList) {
+                Array.from(rightList.children).forEach(child => { if (child.tagName !== 'LABEL') child.remove(); });
+            }
+            variants.forEach(v => {
+                addCustomSizePair(v.label, v.sku, v.price);
             });
         }
     }
@@ -2645,6 +2900,7 @@ async function editProduct(id) {
     // Trigger product type UI update
     handleProductTypeChange(pType);
     refreshVariantPreview();
+    updateLivePreviews();
 }
 
 async function saveProduct(event) {
@@ -2658,23 +2914,67 @@ async function saveProduct(event) {
     let compareAtPerKg = 0;
 
     if (productType === 'custom_box') {
-        const groupContainer = document.getElementById('size-groups-container');
-        const allSlots = groupContainer?.querySelectorAll('.crate-slot') || [];
+        const sizesList = document.getElementById('crate-sizes-list');
+        const varietyList = document.getElementById('crate-varieties-list');
         
         customVariantPayload = [];
-        allSlots.forEach(slot => {
-            const idInput = slot.querySelector('.custom-var-id');
-            const sizeInput = slot.querySelector('.custom-var-size');
-            const unitInput = slot.querySelector('.custom-var-unit');
-            const priceInput = slot.querySelector('.custom-var-price');
-
-            const sku = idInput?.value?.trim();
-            if (sku) {
-                const label = `${sizeInput?.value || ''}${unitInput?.value || 'Kg'}`;
+        
+        // 1. Collect Sizes
+        sizesList?.querySelectorAll('div').forEach(row => {
+            const val = row.querySelector('.size-val')?.value;
+            const unit = row.querySelector('.size-unit')?.value;
+            const price = parseFloat(row.querySelector('.size-price')?.value) || 0;
+            const sku = row.querySelector('.size-sku')?.value?.trim();
+            if (val && price) {
+                const label = `${val}${unit}`;
                 customVariantPayload.push({
                     label: label,
+                    sku: sku || null,
+                    price: price,
+                    quantity_kg: parseFloat(val) || 0
+                });
+                variantQuantities.push(label);
+            }
+        });
+
+        // 2. Collect Unified Variety Pool
+        varietyList?.querySelectorAll('.variety-pool-item').forEach(slot => {
+            const sku = slot.querySelector('.custom-var-id')?.value?.trim();
+            if (sku) {
+                customVariantPayload.push({
+                    label: `VarietyPool:${sku}`,
                     sku: sku,
-                    price: parseFloat(priceInput?.value) || 0
+                    price: 0,
+                    quantity_kg: 0
+                });
+            }
+        });
+
+        // Ensure we have at least one weight for storefront display
+        if (variantQuantities.length === 0) {
+            variantQuantities.push('3kg'); // Default fallback
+        }
+    } else if (productType === 'custom') {
+        const leftList = document.getElementById('custom-size-left-list');
+        const rightList = document.getElementById('custom-size-right-list');
+        
+        customVariantPayload = [];
+        
+        const labels = leftList?.querySelectorAll('.custom-var-size') || [];
+        const rows = rightList?.querySelectorAll('.custom-var-row') || [];
+        
+        labels.forEach((lInput, i) => {
+            const label = lInput.value.trim();
+            const rRow = rows[i];
+            const sku = rRow?.querySelector('.custom-var-id')?.value?.trim();
+            const price = parseFloat(rRow?.querySelector('.custom-var-price')?.value) || 0;
+            
+            if (label && !isNaN(price)) {
+                customVariantPayload.push({
+                    label: label,
+                    sku: sku || null,
+                    price: price,
+                    quantity_kg: parseFloat(label) || 0
                 });
                 variantQuantities.push(label);
             }
@@ -2705,8 +3005,9 @@ async function saveProduct(event) {
         base_price:              basePricePerKg,
         base_price_per_kg:       basePricePerKg,
         compare_at_price_per_kg: compareAtPerKg || null,
-        available_weights:       variantQuantities,
-        variant_quantities:      variantQuantities.join(','),
+        available_weights:       [...new Set(variantQuantities.map(v => parseFloat(v) || 0))].sort((a,b) => a - b),
+        variant_quantities:      [...new Set(variantQuantities)].join(','),
+        unit:                    form.elements['unit']?.value || 'kg',
         price:                   defaultPrice,
         original_price:          defaultOldPrice,
         stock_count:             parseInt(form.elements['stock_count'].value) || 0,
@@ -2871,10 +3172,62 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if(!typedSku || typedSku.length < 2) return;
 
-            const matches = allProducts.filter(p => 
-                (p.sku && p.sku.toUpperCase().includes(typedSku)) || 
-                (p.name && p.name.toUpperCase().includes(typedSku))
-            ).slice(0, 5); // Limit to 5 results
+            const val = typedSku.toLowerCase();
+            const results = allProducts.filter(p => {
+                const searchStr = `${p.name} ${p.sku} ${p.categories?.name || ''}`.toLowerCase();
+                return searchStr.includes(val);
+            }).sort((a,b) => a.name.toLowerCase().startsWith(val) ? -1 : 1).slice(0, 8);
+
+            if(results.length > 0) {
+                const dropdown = document.createElement('div');
+                dropdown.id = 'sku-autocomplete-list';
+                const rect = input.getBoundingClientRect();
+                dropdown.style.cssText = `
+                    position: absolute; background: white; border: 1px solid #e2e8f0;
+                    border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+                    z-index: 1000; width: ${Math.max(input.offsetWidth, 250)}px;
+                    max-height: 280px; overflow-y: auto; padding: 8px 0;
+                    top: ${window.scrollY + rect.bottom + 8}px; left: ${window.scrollX + rect.left}px;
+                `;
+
+                results.forEach(p => {
+                    const item = document.createElement('div');
+                    item.style.cssText = `padding: 10px 16px; cursor: pointer; display: flex; align-items: center; gap: 12px; transition: all 0.2s;`;
+                    item.innerHTML = `
+                        <img src="${p.image_url || 'https://via.placeholder.com/40'}" style="width:36px; height:36px; border-radius:8px; object-fit:cover; background:#f1f5f9;">
+                        <div style="flex:1; overflow:hidden;">
+                            <div style="font-weight:800; color:#1e293b; font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${p.name}</div>
+                            <div style="font-size:10px; color:#64748b;">${p.categories?.name || 'Variety'} • SKU: ${p.sku || '-'}</div>
+                        </div>
+                        <div style="font-weight:800; color:#1e293b; font-size:13px;">₹${p.base_price || 0}</div>
+                    `;
+                    item.onclick = () => {
+                        input.value = p.sku;
+                        const parent = input.closest('.crate-slot') || input.closest('.custom-var-row') || input.closest('.variety-pool-item');
+                        const previewArea = parent?.querySelector('.variety-product-preview');
+                        if (previewArea) {
+                            previewArea.style.display = 'flex';
+                            previewArea.querySelector('.preview-img').src = p.image_url || '';
+                            previewArea.querySelector('.preview-name').innerText = p.name;
+                            input.style.display = 'none';
+                            previewArea.onclick = () => {
+                                previewArea.style.display = 'none';
+                                input.style.display = 'block';
+                                input.focus();
+                                input.select();
+                            };
+                        }
+                        const priceInput = parent?.querySelector('.custom-var-price') || parent?.querySelector('.size-price');
+                        if(priceInput) priceInput.value = p.base_price || 0;
+                        dropdown.remove();
+                    };
+                    item.onmouseover = () => { item.style.background = '#f1f5f9'; item.style.transform = 'translateX(4px)'; };
+                    item.onmouseout = () => { item.style.background = 'white'; item.style.transform = 'translateX(0)'; };
+                    dropdown.appendChild(item);
+                });
+                document.body.appendChild(dropdown);
+                return; // Early exit since we handled it
+            }
 
             if(matches.length > 0) {
                 const dropdown = document.createElement('div');
@@ -2911,6 +3264,25 @@ document.addEventListener('DOMContentLoaded', () => {
                         input.value = p.sku;
                         // Support both old list and new crate builder layouts
                         const parent = input.closest('.crate-slot') || input.closest('.custom-var-row');
+                        
+                        // Update Crate Builder Preview if applicable
+                        const previewArea = parent?.querySelector('.variety-product-preview');
+                        if (previewArea) {
+                            previewArea.style.display = 'flex';
+                            previewArea.querySelector('.preview-img').src = p.image_url || '';
+                            previewArea.querySelector('.preview-name').innerText = p.name;
+                            previewArea.querySelector('.preview-sku').innerText = p.sku;
+                            input.style.display = 'none'; // Hide input
+                            
+                            // Add click to edit logic
+                            previewArea.onclick = () => {
+                                previewArea.style.display = 'none';
+                                input.style.display = 'block';
+                                input.focus();
+                                input.select();
+                            };
+                        }
+
                         const priceInput = parent?.querySelector('.custom-var-price');
                         if(priceInput) priceInput.value = p.base_price || 0;
                         dropdown.remove();
