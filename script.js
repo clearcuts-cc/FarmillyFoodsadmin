@@ -25,54 +25,58 @@ let notifications = [];
 let currentModalOrder = null;
 
 // --- Boot: wait for Supabase then load data ---
-document.addEventListener('DOMContentLoaded', () => {
-    function tryInit() {
-        if (!window.supabase || !window.supabase.createClient) {
-            setTimeout(tryInit, 200);
-            return;
-        }
-
-        // Init client with session persistence
-        supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey, {
-            auth: {
-                persistSession: true,
-                autoRefreshToken: true,
-                detectSessionInUrl: false
-            }
-        });
-        console.log('✅ Supabase client ready');
-
-        // ① Restore session on refresh
-        supabaseClient.auth.getSession().then(({ data }) => {
-            if (data.session) {
-                console.log('🔑 Session restored');
-                localStorage.setItem('adminLoggedIn', 'true');
-                showAdminContent();
-                loadDashboardData().then(() => handleRouting());
-            } else {
-                console.log('🔒 No session');
-                localStorage.removeItem('adminLoggedIn');
-                showLoginScreen();
-            }
-        });
-
-        // ② Listen for auth changes
-        supabaseClient.auth.onAuthStateChange((event, session) => {
-            console.log('🔔 Auth Event:', event);
-            if (session) {
-                localStorage.setItem('adminLoggedIn', 'true');
-                showAdminContent();
-                if (event === 'SIGNED_IN') {
-                    loadDashboardData().then(() => handleRouting());
-                }
-            } else {
-                localStorage.removeItem('adminLoggedIn');
-                showLoginScreen();
-            }
-        });
+function tryInit() {
+    if (!window.supabase || !window.supabase.createClient) {
+        setTimeout(tryInit, 200);
+        return;
     }
+
+    // Init client with session persistence
+    supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey, {
+        auth: {
+            persistSession: true,
+            autoRefreshToken: true,
+            detectSessionInUrl: false
+        }
+    });
+    console.log('✅ Supabase client ready');
+
+    // ① Restore session on refresh
+    supabaseClient.auth.getSession().then(({ data }) => {
+        if (data.session) {
+            console.log('🔑 Session restored');
+            localStorage.setItem('adminLoggedIn', 'true');
+            showAdminContent();
+            loadDashboardData().then(() => handleRouting());
+        } else {
+            console.log('🔒 No session');
+            localStorage.removeItem('adminLoggedIn');
+            showLoginScreen();
+        }
+    });
+
+    // ② Listen for auth changes
+    supabaseClient.auth.onAuthStateChange((event, session) => {
+        console.log('🔔 Auth Event:', event);
+        if (session) {
+            localStorage.setItem('adminLoggedIn', 'true');
+            showAdminContent();
+            if (event === 'SIGNED_IN') {
+                loadDashboardData().then(() => handleRouting());
+            }
+        } else {
+            localStorage.removeItem('adminLoggedIn');
+            showLoginScreen();
+        }
+    });
+}
+
+// Execute boot sequence
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', tryInit);
+} else {
     tryInit();
-});
+}
 
 async function loadDashboardData() {
     console.log('📦 Pre-fetching dashboard data...');
@@ -149,6 +153,14 @@ async function handleLogin() {
 
     if (!email || !password) return;
 
+    if (!supabaseClient) {
+        const initialized = initSupabase();
+        if (!initialized) {
+            showToast('Authentication system is not ready. Please refresh.', 'error');
+            return;
+        }
+    }
+
     // Strict Restriction: Only allow the official admin email
     if (email !== 'info.farmmily@gmail.com') {
         if (errorEl) {
@@ -190,15 +202,16 @@ async function handleLogin() {
 }
 
 async function handleLogout() {
-    await supabaseClient.auth.signOut();
-    localStorage.removeItem('adminLoggedIn');
-    showLoginScreen();
-    showToast('Logged out successfully');
-}
-
-function handleLogout() {
-    localStorage.removeItem('adminLoggedIn');
-    location.reload();
+    try {
+        if (supabaseClient) await supabaseClient.auth.signOut();
+        localStorage.removeItem('adminLoggedIn');
+        showLoginScreen();
+        showToast('Logged out successfully');
+    } catch (e) {
+        console.error('Logout error:', e);
+        localStorage.removeItem('adminLoggedIn');
+        location.reload();
+    }
 }
 
 
@@ -348,19 +361,19 @@ function navigateTo(pageId, push = true) {
         }
     }
     
-function syncUrl(pageId) { const hash = pageId === 'dashboard' ? '' : pageId; if (window.location.hash !== '#' + hash) { window.history.pushState({ pageId: pageId }, '', '#' + hash); } } function handleRouting() { const hash = window.location.hash.replace('#', '').toLowerCase(); const pageId = hash || 'dashboard'; navigateTo(pageId, false); } window.addEventListener('hashchange', () => handleRouting()); window.onpopstate = (e) => { if (e.state && e.state.pageId) navigateTo(e.state.pageId, false); };
-    // Support index.html and file protocols
-    if (currentPath.includes('index.html')) {
-        const base = currentPath.substring(0, currentPath.lastIndexOf('/') + 1);
-        newUrl = base + (pageId === 'dashboard' ? 'index.html' : 'index.html?page=' + pageId);
-    } else if (window.location.protocol === 'file:') {
-        newUrl = currentPath + (pageId === 'dashboard' ? '' : '?page=' + pageId);
+    // Update URL hash without breaking the login flow
+    if (push) {
+        const hash = pageId === 'dashboard' ? '' : '#' + pageId;
+        if (window.location.hash !== hash) {
+            window.history.pushState({ pageId }, '', hash || window.location.pathname);
+        }
     }
-    
-    if (window.location.pathname + window.location.search !== newUrl) {
-        try {
-            window.history.pushState({ pageId: pageId }, '', newUrl);
-        } catch(e) { console.error('Router failed:', e); }
+}
+
+function syncUrl(pageId) {
+    const hash = pageId === 'dashboard' ? '' : '#' + pageId;
+    if (window.location.hash !== hash) {
+        window.history.pushState({ pageId }, '', hash || window.location.pathname);
     }
 }
 
