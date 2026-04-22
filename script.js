@@ -26,33 +26,44 @@ let currentModalOrder = null;
 
 // --- Boot: wait for Supabase then load data ---
 document.addEventListener('DOMContentLoaded', () => {
-    console.log('📦 DOMContentLoaded fired');
-    function bootAdmin() {
-        console.log('🔧 bootAdmin: attempting initSupabase...');
-        if (!initSupabase()) {
-            console.log('⏳ Supabase CDN not ready, retrying in 300ms...');
-            setTimeout(bootAdmin, 300);
+    function tryInit() {
+        if (!window.supabase || !window.supabase.createClient) {
+            setTimeout(tryInit, 200);
             return;
         }
-        console.log('✅ bootAdmin: Supabase ready! adminLoggedIn:', localStorage.getItem('adminLoggedIn'));
-        
-        // Handle routing based on URL
-        handleRouting();
 
-        // Check current session
-        checkSession();
+        // Init client with session persistence
+        supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey, {
+            auth: {
+                persistSession: true,
+                autoRefreshToken: true,
+                detectSessionInUrl: false
+            }
+        });
+        console.log('✅ Supabase client ready');
 
-        // Listen for auth changes
+        // ① Restore session on refresh
+        supabaseClient.auth.getSession().then(({ data }) => {
+            if (data.session) {
+                console.log('🔑 Session restored');
+                localStorage.setItem('adminLoggedIn', 'true');
+                showAdminContent();
+                loadDashboardData().then(() => handleRouting());
+            } else {
+                console.log('🔒 No session');
+                localStorage.removeItem('adminLoggedIn');
+                showLoginScreen();
+            }
+        });
+
+        // ② Listen for auth changes
         supabaseClient.auth.onAuthStateChange((event, session) => {
             console.log('🔔 Auth Event:', event);
             if (session) {
                 localStorage.setItem('adminLoggedIn', 'true');
                 showAdminContent();
-                // If it was a redirect from magic link, clear URL
                 if (event === 'SIGNED_IN') {
-                    const next = sessionStorage.getItem('redirectAfterLogin') || 'dashboard';
-                    sessionStorage.removeItem('redirectAfterLogin');
-                    navigateTo(next);
+                    loadDashboardData().then(() => handleRouting());
                 }
             } else {
                 localStorage.removeItem('adminLoggedIn');
@@ -60,8 +71,27 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     }
-    bootAdmin();
+    tryInit();
 });
+
+async function loadDashboardData() {
+    console.log('📦 Pre-fetching dashboard data...');
+    try {
+        const [catRes, prodRes, orderRes] = await Promise.all([
+            supabaseClient.from('categories').select('*'),
+            supabaseClient.from('products').select('*'),
+            supabaseClient.from('orders').select('*').order('created_at', { ascending: false })
+        ]);
+
+        if (catRes.data) allCategories = catRes.data;
+        if (prodRes.data) allProducts = prodRes.data;
+        if (orderRes.data) allOrders = orderRes.data;
+        
+        console.log('✅ Dashboard data ready');
+    } catch (e) {
+        console.error('❌ Data pre-fetch failed:', e);
+    }
+}
 
 async function checkSession() {
     const { data: { session } } = await supabaseClient.auth.getSession();
@@ -318,30 +348,7 @@ function navigateTo(pageId, push = true) {
         }
     }
     
-    if(window.innerWidth <= 1024) {
-        const sidebar = document.getElementById('sidebar');
-        if (sidebar) sidebar.classList.remove('show');
-    }
-
-    // URL Synchronization
-    if (push) {
-        syncUrl(pageId);
-    }
-
-    // Page Specific Refresh
-    if (pageId === 'dashboard') renderDashboard();
-    if (pageId === 'all-products') renderProducts();
-    if (pageId === 'categories') renderCategories();
-    if (pageId === 'inventory') renderInventory();
-    if (pageId === 'all-orders') renderOrders();
-    if (pageId === 'delivery') renderDelivery();
-}
-
-function syncUrl(pageId) {
-    const currentPath = window.location.pathname;
-    let targetPath = pageId === 'dashboard' ? '/' : '/' + pageId;
-    let newUrl = targetPath;
-    
+function syncUrl(pageId) { const hash = pageId === 'dashboard' ? '' : pageId; if (window.location.hash !== '#' + hash) { window.history.pushState({ pageId: pageId }, '', '#' + hash); } } function handleRouting() { const hash = window.location.hash.replace('#', '').toLowerCase(); const pageId = hash || 'dashboard'; navigateTo(pageId, false); } window.addEventListener('hashchange', () => handleRouting()); window.onpopstate = (e) => { if (e.state && e.state.pageId) navigateTo(e.state.pageId, false); };
     // Support index.html and file protocols
     if (currentPath.includes('index.html')) {
         const base = currentPath.substring(0, currentPath.lastIndexOf('/') + 1);
