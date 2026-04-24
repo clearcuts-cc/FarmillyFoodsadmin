@@ -678,6 +678,11 @@ tbody tr:last-child td { border-bottom: none; }
     box-shadow: 0 0 0 3px rgba(82, 183, 136, 0.2);
 }
 
+#toggle-password:hover {
+    color: var(--primary) !important;
+    transform: translateY(-50%) scale(1.1) !important;
+}
+
 textarea.form-control {
     resize: vertical;
     min-height: 120px;

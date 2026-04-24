@@ -76,6 +76,26 @@ if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', tryInit);
 } else {
     tryInit();
+    setupLoginToggle();
+}
+
+function setupLoginToggle() {
+    const passwordToggle = document.getElementById('toggle-password');
+    const passwordInput = document.getElementById('login-password');
+
+    if (passwordToggle && passwordInput) {
+        passwordToggle.addEventListener('click', () => {
+            const isPassword = passwordInput.getAttribute('type') === 'password';
+            passwordInput.setAttribute('type', isPassword ? 'text' : 'password');
+            
+            // Toggle icon classes
+            passwordToggle.classList.toggle('ph-eye');
+            passwordToggle.classList.toggle('ph-eye-slash');
+            
+            // Subtle feedback
+            passwordToggle.style.color = isPassword ? 'var(--primary)' : 'var(--text-muted)';
+        });
+    }
 }
 
 async function loadDashboardData() {
@@ -3661,6 +3681,7 @@ async function printInvoice() {
     const orderDate = new Date(o.created_at);
     document.getElementById('inv-date').innerText = orderDate.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
     document.getElementById('inv-cust-name').innerText = (o.display_name || o.customer_name || 'Guest').toUpperCase();
+    document.getElementById('inv-cust-phone').innerText = `Phone: ${o.phone || o.address?.phone || o.profile?.phone || '-'}`;
     
     // Address & POS
     let addr = '';
@@ -3751,6 +3772,94 @@ async function printInvoice() {
                 </style>
             </head>
             <body>${content}</body>
+        </html>
+    `);
+    printWindow.document.close();
+    setTimeout(() => {
+        printWindow.print();
+    }, 800);
+}
+
+async function printShippingBill() {
+    if(!currentModalOrder) return;
+    const o = currentModalOrder;
+    
+    const custName = (o.display_name || o.customer_name || 'Guest').toUpperCase();
+    const custPhone = o.phone || o.address?.phone || o.profile?.phone || '-';
+    
+    // Populate template
+    document.getElementById('sb-cust-name').innerText = custName;
+    document.getElementById('sb-cust-phone').innerText = `(${custPhone})`;
+    
+    // Address
+    let addr = '';
+    if (o.address && typeof o.address === 'object') {
+        const a = o.address;
+        addr = `${a.address_line || ''}, ${a.city || ''}, ${a.state || ''} ${a.pincode ? '- ' + a.pincode : ''}`.replace(/^, /, '').trim();
+    } else {
+        addr = o.address_text || o.address_line || (typeof o.address === 'string' ? o.address : '') || 'No address provided';
+    }
+    
+    // Formatting: remove Map link part and redundant phone labels
+    if(addr.includes('(Map:')) addr = addr.split('(Map:')[0].trim().replace(/,$/, '');
+    addr = addr.replace(/Phone number:?\s*[\d+\-\s]+/gi, '').replace(/Mobile:?\s*[\d+\-\s]+/gi, '').trim().replace(/,,/g, ',').replace(/^,/, '').replace(/,$/, '');
+    
+    document.getElementById('sb-addr').innerText = addr;
+
+    // Print
+    const content = document.getElementById('shipping-bill-template').innerHTML;
+    const printWindow = window.open('', '_blank');
+    printWindow.document.write(`
+        <!DOCTYPE html>
+        <html>
+            <head>
+                <title>Shipping Bill - ${o.order_number || o.id}</title>
+                <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+                <style>
+                    @page { 
+                        size: A6; 
+                        margin: 0; 
+                    }
+                    html, body { 
+                        margin: 0; 
+                        padding: 0; 
+                        background: #fff; 
+                        -webkit-print-color-adjust: exact; 
+                        font-family: 'Inter', sans-serif;
+                        width: 100%;
+                        height: 100%;
+                    }
+                    body {
+                        display: flex;
+                        justify-content: center;
+                        align-items: center;
+                    }
+                    .print-wrapper {
+                        background: white;
+                        width: 105mm;
+                        height: 148mm;
+                        padding: 30px;
+                        box-sizing: border-box;
+                        border: 2px solid #000;
+                        display: flex;
+                        flex-direction: column;
+                        position: relative;
+                    }
+                    @media print {
+                        body { display: block; }
+                        .print-wrapper {
+                            margin: 0 auto;
+                            border: 2px solid #000 !important;
+                        }
+                    }
+                    * { box-sizing: border-box; }
+                </style>
+            </head>
+            <body>
+                <div class="print-wrapper">
+                    ${content}
+                </div>
+            </body>
         </html>
     `);
     printWindow.document.close();
