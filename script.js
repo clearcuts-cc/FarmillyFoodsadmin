@@ -744,7 +744,7 @@ async function saveProductVariants(productId, rawQuantities, pricing = {}) {
     if (fetchError) throw fetchError;
 
     const staleIds = (existingVariants || [])
-        .filter(variant => !labels.includes(variant.label))
+        .filter(variant => !labels.includes(variant.label) && !(variant.label && variant.label.startsWith('VarietyPool:')))
         .map(variant => variant.id);
 
     if (staleIds.length > 0) {
