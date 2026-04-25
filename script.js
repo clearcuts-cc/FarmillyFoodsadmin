@@ -73,29 +73,42 @@ function tryInit() {
 
 // Execute boot sequence
 if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', tryInit);
+    document.addEventListener('DOMContentLoaded', () => {
+        tryInit();
+        setupLoginToggle();
+    });
 } else {
     tryInit();
     setupLoginToggle();
 }
 
 function setupLoginToggle() {
-    const passwordToggle = document.getElementById('toggle-password');
-    const passwordInput = document.getElementById('login-password');
+    // Single global listener is more robust against element replacement by icon libraries
+    if (window.hasSetupLoginToggle) return;
+    window.hasSetupLoginToggle = true;
 
-    if (passwordToggle && passwordInput) {
-        passwordToggle.addEventListener('click', () => {
-            const isPassword = passwordInput.getAttribute('type') === 'password';
-            passwordInput.setAttribute('type', isPassword ? 'text' : 'password');
-            
-            // Toggle icon classes
-            passwordToggle.classList.toggle('ph-eye');
-            passwordToggle.classList.toggle('ph-eye-slash');
-            
-            // Subtle feedback
-            passwordToggle.style.color = isPassword ? 'var(--primary)' : 'var(--text-muted)';
-        });
-    }
+    document.addEventListener('click', function(e) {
+        const toggle = e.target.closest('#toggle-password');
+        if (!toggle) return;
+
+        e.preventDefault();
+        const input = document.getElementById('login-password');
+        if (!input) return;
+
+        const isPassword = input.type === 'password';
+        input.type = isPassword ? 'text' : 'password';
+        
+        // Toggle icon classes explicitly
+        if (isPassword) {
+            toggle.classList.remove('ph-eye');
+            toggle.classList.add('ph-eye-slash');
+            toggle.style.color = 'var(--primary)';
+        } else {
+            toggle.classList.remove('ph-eye-slash');
+            toggle.classList.add('ph-eye');
+            toggle.style.color = 'var(--text-muted)';
+        }
+    });
 }
 
 async function loadDashboardData() {
@@ -3064,17 +3077,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Password Toggle Logic
-    const togglePassword = document.getElementById('toggle-password');
-    const passwordInput = document.getElementById('login-password');
-    if (togglePassword && passwordInput) {
-        togglePassword.addEventListener('click', () => {
-            const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
-            passwordInput.setAttribute('type', type);
-            togglePassword.classList.toggle('ph-eye');
-            togglePassword.classList.toggle('ph-eye-slash');
-        });
-    }
+    // Password Toggle Logic removed from here - now handled by delegation in setupLoginToggle() at the top of the script
 });
 
 // --- Reviews CRUD ---
