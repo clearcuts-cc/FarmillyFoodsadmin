@@ -2751,7 +2751,7 @@ async function saveProduct(event) {
                     price: 0, // Parent box itself is usually 0, variety prices added
                     is_default: val == '3'
                 });
-                variantQuantities.push(`${val}${unit}`);
+                variantQuantities.push(parseFloat(val) || 0);
             }
         });
 
@@ -2764,13 +2764,13 @@ async function saveProduct(event) {
             const varietyValue = idInput?.value?.trim();
             if (varietyValue && !uniqueVarieties.has(varietyValue)) {
                 uniqueVarieties.add(varietyValue);
+                const varietyLabel = `VarietyPool: ${varietyValue}`;
                 customVariantPayload.push({
-                    label: `VarietyPool: ${varietyValue}`,
+                    label: varietyLabel,
                     sku: varietyValue.toLowerCase().substring(0, 4),
                     quantity_kg: 1,
                     price: parseFloat(priceInput?.value) || 0
                 });
-                variantQuantities.push(label);
             }
         });
     } else {
