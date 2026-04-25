@@ -711,7 +711,7 @@ async function saveProductVariants(productId, rawQuantities, pricing = {}) {
             return {
                 product_id: productId,
                 label: v.label,
-                quantity_kg: parseFloat(v.label) || 0,
+                quantity_kg: v.quantity_kg !== undefined ? v.quantity_kg : (parseFloat(v.label) || 0),
                 is_default: index === 0,
                 price: parseFloat(v.price) || 0,
                 sku: v.sku || null,
@@ -744,7 +744,7 @@ async function saveProductVariants(productId, rawQuantities, pricing = {}) {
     if (fetchError) throw fetchError;
 
     const staleIds = (existingVariants || [])
-        .filter(variant => !labels.includes(variant.label) && !(variant.label && variant.label.startsWith('VarietyPool:')))
+        .filter(variant => !labels.includes(variant.label))
         .map(variant => variant.id);
 
     if (staleIds.length > 0) {
@@ -2397,9 +2397,13 @@ function handleProductTypeChange(type) {
     const crateBuilder = document.getElementById('section-crate-builder');
     if (crateBuilder) crateBuilder.style.display = (type === 'custom_box') ? 'block' : 'none';
     
-    // Hide standard base price section if custom box
+    // Show standard pricing section (Base Price) even for custom box, but hide manual weights input
     const standardPricing = document.getElementById('standard-pricing-section');
-    if (standardPricing) standardPricing.style.display = (type === 'custom_box') ? 'none' : 'block';
+    if (standardPricing) {
+        standardPricing.style.display = 'block';
+        const weightsGroup = standardPricing.querySelector('input[name="variant_quantities"]')?.closest('.form-group');
+        if (weightsGroup) weightsGroup.style.display = (type === 'custom_box') ? 'none' : 'block';
+    }
 }
 
 function addNewWeightGroup(val, unit) {
@@ -2728,8 +2732,8 @@ async function saveProduct(event) {
 
     let variantQuantities = [];
     let customVariantPayload = null;
-    let basePricePerKg = 0;
-    let compareAtPerKg = 0;
+    let basePricePerKg = parseFloat(form.elements['base_price_per_kg']?.value || 0);
+    let compareAtPerKg = parseFloat(form.elements['compare_at_price_per_kg']?.value || 0);
 
     if (productType === 'custom_box') {
         const groupContainer = document.getElementById('size-groups-container');
@@ -2748,7 +2752,8 @@ async function saveProduct(event) {
                 customVariantPayload.push({
                     label: `${val}${unit} Box`,
                     quantity_kg: parseFloat(val) || 0,
-                    price: 0, // Parent box itself is usually 0, variety prices added
+                    price: calculateVariantPrice(basePricePerKg, parseFloat(val) || 0),
+                    compare_at_price: compareAtPerKg > 0 ? calculateVariantPrice(compareAtPerKg, parseFloat(val) || 0) : null,
                     is_default: val == '3'
                 });
                 variantQuantities.push(`${val}${unit}`);
@@ -2770,23 +2775,16 @@ async function saveProduct(event) {
                     quantity_kg: 1,
                     price: parseFloat(priceInput?.value) || 0
                 });
-                variantQuantities.push(label);
+                variantQuantities.push(varietyValue);
             }
         });
     } else {
         variantQuantities = parseVariantQuantities(form.elements['variant_quantities']?.value || '3,5,7,10,15');
-        basePricePerKg = parseFloat(form.elements['base_price_per_kg']?.value || 0);
-        compareAtPerKg = parseFloat(form.elements['compare_at_price_per_kg']?.value || 0);
-
-        if (productType !== 'multi' && (!basePricePerKg || basePricePerKg <= 0)) {
-            showToast('Please enter a valid Base Price Per Kg', 'warning');
-            return;
-        }
     }
 
     const defaultVariantQty = parseFloat(variantQuantities[0]) || 1;
-    const defaultPrice    = customVariantPayload ? customVariantPayload[0].price : calculateVariantPrice(basePricePerKg, defaultVariantQty);
-    const defaultOldPrice = (customVariantPayload || compareAtPerKg <= 0) ? null : calculateVariantPrice(compareAtPerKg, defaultVariantQty);
+    const defaultPrice    = (customVariantPayload && customVariantPayload[0].price > 0) ? customVariantPayload[0].price : calculateVariantPrice(basePricePerKg, defaultVariantQty);
+    const defaultOldPrice = (customVariantPayload && customVariantPayload[0].compare_at_price > 0) ? customVariantPayload[0].compare_at_price : (compareAtPerKg <= 0 ? null : calculateVariantPrice(compareAtPerKg, defaultVariantQty));
 
     const obj = {
         name:                    form.elements['name'].value.trim(),
@@ -2836,16 +2834,18 @@ async function saveProduct(event) {
 
         await touchProductCatalogSync(productId);
         
-        if (obj.category_id === 10) {
-            const varietyName = obj.name.split(' ')[0];
-            await syncVarietyPrices(varietyName, basePricePerKg, compareAtPerKg, obj.image_url);
-        } else if (obj.sku) {
-            await syncSameNamedProducts(obj.sku, obj.image_url);
+        if (productType !== 'custom_box') {
+            if (obj.category_id === 10) {
+                const varietyName = obj.name.split(' ')[0];
+                await syncVarietyPrices(varietyName, basePricePerKg, compareAtPerKg, obj.image_url);
+            } else if (obj.sku) {
+                await syncSameNamedProducts(obj.sku, obj.image_url);
+            }
         }
 
         showToast(editingProductId ? 'Product Updated! 🥭' : 'New Product Added! 🥭');
         navigateTo('all-products');
-        renderProducts();
+        await renderProducts();
     } catch (err) {
         console.error(err);
         showToast('Error saving product: ' + err.message, 'error');
