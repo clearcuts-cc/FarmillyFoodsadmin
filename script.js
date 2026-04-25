@@ -3790,86 +3790,107 @@ async function printInvoice() {
     if(!currentModalOrder) return;
     const o = currentModalOrder;
     
-    // Populate template
-    const rawNum = o.order_number ? o.order_number.replace(/\D/g, '') : o.id.toString().substring(0,4);
-    const displayNum = `INV-FF-2026/27-${rawNum.toString().padStart(4, '0')}`;
-    document.getElementById('inv-num').innerText = `Invoice: ${displayNum}`;
+    // 1. Basic Metadata
+    const displayNum = o.order_number || `INV-${o.id.toString().substring(0,8)}`;
+    document.getElementById('inv-num').innerText = displayNum;
     
     const orderDate = new Date(o.created_at);
-    document.getElementById('inv-date').innerText = orderDate.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    document.getElementById('inv-date').innerText = orderDate.toLocaleDateString('en-GB');
     document.getElementById('inv-cust-name').innerText = (o.display_name || o.customer_name || 'Guest').toUpperCase();
     document.getElementById('inv-cust-phone').innerText = `Phone: ${o.phone || o.address?.phone || o.profile?.phone || '-'}`;
     
-    // Address & POS
+    // 2. Address & Place of Supply
     let addr = '';
+    let state = 'Tamil Nadu';
     if (o.address && typeof o.address === 'object') {
         const a = o.address;
         addr = `${a.address_line || ''}, ${a.city || ''}, ${a.state || ''} ${a.pincode ? '- ' + a.pincode : ''}`.replace(/^, /, '').trim();
+        state = a.state || state;
     } else {
-        addr = o.address_text || o.address_line || (typeof o.address === 'string' ? o.address : '') || 'No address provided';
+        addr = o.address || 'No address provided';
     }
-    
-    // Formatting: remove Map link part if it exists in the string
+    // Remove Map links from address text
     if(addr.includes('(Map:')) addr = addr.split('(Map:')[0].trim().replace(/,$/, '');
-    
     document.getElementById('inv-cust-addr').innerText = addr;
+    document.getElementById('inv-cust-pos').innerText = `${state} (33)`;
 
-    // For simplicity, check if TN is in address
-    const isLocal = addr.toLowerCase().includes('tamil nadu') || addr.toLowerCase().includes('tn') || addr.includes('33');
-    document.getElementById('inv-cust-pos').innerText = isLocal ? 'Tamil Nadu (33)' : 'Interstate';
-    
-    // Items
+    // 3. Items Fetching & Processing
+    let orderItems = o.items;
+    if(!orderItems || orderItems.length === 0) {
+        const { data: fetchedItems } = await supabaseClient.from('order_items').select('*').eq('order_id', o.id);
+        orderItems = fetchedItems || [];
+    }
+
     const tbody = document.getElementById('inv-items-body');
-    const { data: items } = await supabaseClient.from('order_items').select('*').eq('order_id', o.id);
-    
     let totalTaxable = 0;
     let totalIGST = 0;
-    if(items && items.length > 0) {
-        tbody.innerHTML = items.map((i, index) => {
+    
+    if(orderItems && orderItems.length > 0) {
+        tbody.innerHTML = orderItems.map((i, index) => {
             const hsn = i.product_name.toLowerCase().includes('honey') ? '040900' : '080450'; 
-            const itemTaxable = parseFloat((i.total_price / 1.05).toFixed(2));
-            const itemIGST = parseFloat((i.total_price - itemTaxable).toFixed(2));
-            const unitTaxable = parseFloat((i.unit_price / 1.05).toFixed(2));
-            
-            totalTaxable += itemTaxable;
-            totalIGST += itemIGST;
+            const lineTotal = parseFloat(i.total_price);
+            const lineTaxable = parseFloat((lineTotal / 1.05).toFixed(2));
+            const lineTax = parseFloat((lineTotal - lineTaxable).toFixed(2));
+            const unitBase = parseFloat((lineTaxable / i.quantity).toFixed(2));
+
+            totalTaxable += lineTaxable;
+            totalIGST += lineTax;
 
             return `
-                <tr style="border-bottom:1px solid #eee">
-                    <td style="padding:10px; text-align:left;">${index + 1}</td>
-                    <td style="padding:10px; text-align:left;">
-                        <div style="font-weight:700;">${i.product_name}</div>
-                        <div style="font-size:11px; color:#888;">${i.weight ? `Weight: ${i.weight}` : ''}</div>
+                <tr style="border-bottom:1px solid #f1f5f9">
+                    <td style="padding:10px 12px; text-align:left; vertical-align:top; color:#64748b; font-weight:600;">${index + 1}</td>
+                    <td style="padding:10px 12px; text-align:left; vertical-align:top;">
+                        <div style="font-weight:800; color:#0f172a; margin-bottom:2px; font-size:13px;">${i.product_name}</div>
+                        ${i.weight ? `<div style="font-size:10px; color:#64748b;">Weight: ${i.weight}</div>` : ''}
                     </td>
-                    <td style="padding:10px; text-align:left;">${hsn}</td>
-                    <td style="padding:10px; text-align:center;">${i.quantity}</td>
-                    <td style="padding:10px; text-align:right;">${unitTaxable.toFixed(2)}</td>
-                    <td style="padding:10px; text-align:right;">${itemIGST.toFixed(2)}<br><small style="color:#888;font-size:9px;">5%</small></td>
-                    <td style="padding:10px; text-align:right;">${itemTaxable.toFixed(2)}</td>
+                    <td style="padding:10px 12px; text-align:left; vertical-align:top; color:#475569; font-family:monospace; font-size:11px;">${hsn}</td>
+                    <td style="padding:10px 12px; text-align:center; vertical-align:top; font-weight:700;">${i.quantity}</td>
+                    <td style="padding:10px 12px; text-align:right; vertical-align:top; color:#475569;">${unitBase.toFixed(2)}</td>
+                    <td style="padding:10px 12px; text-align:right; vertical-align:top;">
+                        <div style="font-weight:600; color:#0f172a;">${lineTax.toFixed(2)}</div>
+                        <div style="color:#94a3b8; font-size:9px;">GST 5%</div>
+                    </td>
+                    <td style="padding:10px 12px; text-align:right; vertical-align:top; font-weight:800; color:#1a4d2e;">${lineTotal.toFixed(2)}</td>
                 </tr>
             `;
         }).join('');
     } else {
-        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:20px">No items found</td></tr>';
-        totalTaxable = o.total / 1.05;
-        totalIGST = o.total - totalTaxable;
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:30px; color:#94a3b8; font-style:italic;">No items found</td></tr>';
+        totalTaxable = parseFloat(o.subtotal || o.total) / 1.05;
+        totalIGST = parseFloat(o.subtotal || o.total) - totalTaxable;
     }
 
+    // 4. Summary & Calculations
     const grandTotal = parseFloat(o.total);
+    document.getElementById('inv-taxable').innerText = totalTaxable.toFixed(2);
+    document.getElementById('inv-tax').innerText = totalIGST.toFixed(2);
     
-    // Summary
-    const sub_disp = document.getElementById('inv-subtotal');
-    if(sub_disp) sub_disp.innerText = totalTaxable.toFixed(2);
-    const taxable_disp = document.getElementById('inv-taxable');
-    if(taxable_disp) taxable_disp.innerText = totalTaxable.toFixed(2);
-    const tax_val = document.getElementById('inv-tax');
-    if(tax_val) tax_val.innerText = totalIGST.toFixed(2);
-    const total_disp = document.getElementById('inv-total-disp');
-    if(total_disp) total_disp.innerText = `₹${grandTotal.toFixed(2)}`;
-    const words_disp = document.getElementById('inv-words');
-    if(words_disp) words_disp.innerText = numberToWords(grandTotal);
+    // Delivery
+    const shipRow = document.getElementById('inv-delivery-row');
+    const shipVal = document.getElementById('inv-delivery');
+    const delivery = parseFloat(o.delivery_charge || 0);
+    if(delivery > 0) {
+        shipRow.style.display = 'flex';
+        shipVal.innerText = delivery.toFixed(2);
+    } else {
+        shipRow.style.display = 'none';
+    }
 
-    // Print
+    // Discount
+    const discRow = document.getElementById('inv-discount-row');
+    const discVal = document.getElementById('inv-discount');
+    const discount = parseFloat(o.discount || 0);
+    if(discount > 0) {
+        discRow.style.display = 'flex';
+        discVal.innerText = `-${discount.toFixed(2)}`;
+    } else {
+        discRow.style.display = 'none';
+    }
+
+    document.getElementById('inv-total-disp').innerText = `₹${grandTotal.toFixed(2)}`;
+    document.getElementById('inv-words').innerText = numberToWords(Math.round(grandTotal));
+
+    // 5. Print Output
     const content = document.getElementById('invoice-template').innerHTML;
     const printWindow = window.open('', '_blank');
     printWindow.document.write(`
@@ -3879,11 +3900,21 @@ async function printInvoice() {
                 <title>&nbsp;</title>
                 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
                 <style>
-                    @page { margin: 0; size: auto; }
-                    html, body { margin: 0; padding: 0; background: #fff; -webkit-print-color-adjust: exact; font-family: 'Inter', sans-serif; }
+                    @page { 
+                        margin: 8mm; 
+                        size: A4 portrait; 
+                    }
+                    html, body { 
+                        margin: 0; 
+                        padding: 0; 
+                        background: #fff; 
+                        -webkit-print-color-adjust: exact; 
+                        font-family: 'Inter', sans-serif; 
+                        width: 100%;
+                    }
                     @media print {
-                        body { padding: 20mm; }
-                        header, footer { display: none !important; }
+                        body { padding: 0; margin: 0; }
+                        header, footer, nav { display: none !important; }
                     }
                     * { box-sizing: border-box; }
                 </style>
@@ -4121,4 +4152,30 @@ function checkAuth() {
              window.location.href = '/';
         }
     }
+}
+
+function formatDate(dateStr) {
+    if(!dateStr) return '-';
+    const date = new Date(dateStr);
+    return date.toLocaleDateString('en-GB', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric'
+    });
+}
+
+function numberToWords(num) {
+    const a = ['', 'One ', 'Two ', 'Three ', 'Four ', 'Five ', 'Six ', 'Seven ', 'Eight ', 'Nine ', 'Ten ', 'Eleven ', 'Twelve ', 'Thirteen ', 'Fourteen ', 'Fifteen ', 'Sixteen ', 'Seventeen ', 'Eighteen ', 'Nineteen '];
+    const b = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
+
+    if ((num = num.toString()).length > 9) return 'overflow';
+    let n = ('000000000' + num).substr(-9).match(/^(\d{2})(\d{2})(\d{2})(\d{1})(\d{2})$/);
+    if (!n) return ''; 
+    let str = '';
+    str += (n[1] != 0) ? (a[Number(n[1])] || b[n[1][0]] + ' ' + a[n[1][1]]) + 'Crore ' : '';
+    str += (n[2] != 0) ? (a[Number(n[2])] || b[n[2][0]] + ' ' + a[n[2][1]]) + 'Lakh ' : '';
+    str += (n[3] != 0) ? (a[Number(n[3])] || b[n[3][0]] + ' ' + a[n[3][1]]) + 'Thousand ' : '';
+    str += (n[4] != 0) ? (a[Number(n[4])] || b[n[4][0]] + ' ' + a[n[4][1]]) + 'Hundred ' : '';
+    str += (n[5] != 0) ? ((str != '') ? 'and ' : '') + (a[Number(n[5])] || b[n[5][0]] + ' ' + a[n[5][1]]) : '';
+    return 'Indian Rupee ' + str + 'Only';
 }

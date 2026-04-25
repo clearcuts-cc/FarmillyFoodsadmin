@@ -1086,12 +1086,12 @@
     <!-- Invoice Print Template (Hidden) -->
     <!-- Invoice Print Template (Hidden) -->
     <div id="invoice-template" style="display:none">
-        <div style="padding:40px; font-family: 'Inter', sans-serif; color:#000; line-height:1.4; background:white; max-width:800px; margin:auto;">
+        <div style="padding:20px; font-family: 'Inter', sans-serif; color:#000; line-height:1.4; background:white; width:100%; box-sizing: border-box;">
             <!-- Header -->
-            <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:30px;">
-                <div style="width:60%;">
+            <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:30px; border-bottom:2px solid #f1f5f9; padding-bottom:20px;">
+                <div style="width:65%;">
                     <img src="assets/farmmily logo.png" style="height:55px; margin-bottom:15px; display:block;" onerror="this.src='https://jztreusepxilnfqffwka.supabase.co/storage/v1/object/public/assets/farmmily%20logo.png'">
-                    <div style="font-size:10px; color:#111; font-weight:700; letter-spacing:0.3px;">
+                    <div style="font-size:10px; color:#111; font-weight:700; letter-spacing:0.3px; line-height:1.4;">
                         FARMMILY AGRO INFRA DEVELOPERS PRIVATE LIMITED<br>
                         <span style="font-weight:400; color:#555;">
                             NO.133A, Mettupalayam Road, Kavundampalayam, Coimbatore - 641030 Tamil Nadu, India<br>
@@ -1100,88 +1100,99 @@
                         </span>
                     </div>
                 </div>
-                <div style="text-align:right;">
-                    <h1 style="font-size:32px; font-weight:400; color:#000; margin:0; line-height:1;">INVOICE</h1>
-                    <div style="color:#555; font-size:13px; margin-top:10px;" id="inv-num">Invoice INV-FF-2026/27-0001</div>
-                </div>
-            </div>
-
-            <div style="display:flex; justify-content:space-between; margin-bottom:30px; font-size:13px;">
-                <div style="width:50%;">
-                    <div style="color:#666; font-weight:600; font-size:11px; text-transform:uppercase; margin-bottom:4px;">Bill To</div>
-                    <div style="font-weight:700; color:#000; font-size:15px; margin-bottom:5px;" id="inv-cust-name">MR. SUNIL</div>
-                    <div id="inv-cust-addr" style="color:#444; font-size:12px; line-height:1.4; margin-bottom:10px; max-width:300px;">
-                        Loading address...
+                <div style="text-align:right; width:30%;">
+                    <h1 style="font-size:32px; font-weight:900; color:#1a4d2e; margin:0 0 10px 0; line-height:1; letter-spacing:-1px;">INVOICE</h1>
+                    <div style="background:#f8fafc; padding:10px; border-radius:8px; border:1px solid #e2e8f0; font-size:12px;">
+                        <div style="margin-bottom:6px;">
+                            <span style="color:#64748b; font-size:9px; font-weight:800; text-transform:uppercase; display:block;">Invoice No</span>
+                            <span style="color:#0f172a; font-weight:700;" id="inv-num">INV-FF-2026/27-0001</span>
+                        </div>
+                        <div style="margin-bottom:6px;">
+                            <span style="color:#64748b; font-size:9px; font-weight:800; text-transform:uppercase; display:block;">Date</span>
+                            <span style="color:#0f172a; font-weight:700;" id="inv-date">14/04/2026</span>
+                        </div>
+                        <div>
+                            <span style="color:#64748b; font-size:9px; font-weight:800; text-transform:uppercase; display:block;">Supply Place</span>
+                            <span style="color:#0f172a; font-weight:700;" id="inv-cust-pos">Tamil Nadu (33)</span>
+                        </div>
                     </div>
-                    <div style="font-weight:700; color:#000; font-size:13px;" id="inv-cust-phone">Phone: -</div>
-                </div>
-                </div>
-                <div style="text-align:right;">
-                    <div style="color:#444; font-weight:500;">Place Of Supply: <span id="inv-cust-pos" style="font-weight:700;">Tamil Nadu (33)</span></div>
                 </div>
             </div>
 
-            <!-- Date Row with Grey Box -->
-            <div style="display:flex; flex-direction:column; margin-bottom:30px;">
-                <div style="background:#555; color:white; padding:5px 12px; font-size:11px; font-weight:700; width:fit-content; border-radius:2px 2px 0 0;">Invoice Date</div>
-                <div style="padding:8px 12px; border:1px solid #ddd; border-top:none; font-size:13px; font-weight:600; width:fit-content; border-radius:0 0 2px 2px;" id="inv-date">14/04/2026</div>
+            <!-- Client Info -->
+            <div style="margin-bottom:30px; display:flex; justify-content:space-between;">
+                <div style="width:100%;">
+                    <div style="color:#1a4d2e; font-weight:800; font-size:10px; text-transform:uppercase; margin-bottom:8px;">BILL TO</div>
+                    <div style="padding-left:10px; border-left:3px solid #1a4d2e;">
+                        <div style="font-weight:900; color:#0f172a; font-size:18px; margin-bottom:4px;" id="inv-cust-name">MR. SUNIL</div>
+                        <div id="inv-cust-addr" style="color:#475569; font-size:12px; line-height:1.5; margin-bottom:6px; max-width:450px;">
+                            Loading address...
+                        </div>
+                        <div style="font-weight:700; color:#1a4d2e; font-size:13px;" id="inv-cust-phone">Phone: -</div>
+                    </div>
+                </div>
             </div>
 
             <!-- Items Table -->
-            <table style="width:100%; border-collapse:collapse; margin:20px 0;">
+            <table style="width:100%; border-collapse:collapse; margin-bottom:20px;">
                 <thead>
-                    <tr style="background:#444; color:white;">
-                        <th style="padding:8px 10px; text-align:left; font-size:11px; width:30px;">#</th>
-                        <th style="padding:8px 10px; text-align:left; font-size:11px;">Item & Description</th>
-                        <th style="padding:8px 10px; text-align:left; font-size:11px; width:80px;">HSN/SAC</th>
-                        <th style="padding:8px 10px; text-align:center; font-size:11px; width:40px;">Qty</th>
-                        <th style="padding:8px 10px; text-align:right; font-size:11px; width:70px;">Rate</th>
-                        <th style="padding:8px 10px; text-align:right; font-size:11px; width:70px;">IGST</th>
-                        <th style="padding:8px 10px; text-align:right; font-size:11px; width:80px;">Amount</th>
+                    <tr style="background:#1a4d2e; color:white;">
+                        <th style="padding:10px 12px; text-align:left; font-size:10px; text-transform:uppercase; width:30px; border-radius:4px 0 0 0;">#</th>
+                        <th style="padding:10px 12px; text-align:left; font-size:10px; text-transform:uppercase;">Description</th>
+                        <th style="padding:10px 12px; text-align:left; font-size:10px; text-transform:uppercase; width:80px;">HSN</th>
+                        <th style="padding:10px 12px; text-align:center; font-size:10px; text-transform:uppercase; width:40px;">Qty</th>
+                        <th style="padding:10px 12px; text-align:right; font-size:10px; text-transform:uppercase; width:80px;">Rate</th>
+                        <th style="padding:10px 12px; text-align:right; font-size:10px; text-transform:uppercase; width:80px;">Tax</th>
+                        <th style="padding:10px 12px; text-align:right; font-size:10px; text-transform:uppercase; width:90px; border-radius:0 4px 0 0;">Amount</th>
                     </tr>
                 </thead>
-                <tbody id="inv-items-body" style="font-size:12px; color:#111;">
+                <tbody id="inv-items-body" style="font-size:12px; color:#1e293b;">
                     <!-- Items will be injected here -->
                 </tbody>
             </table>
 
             <!-- Summary Section -->
-            <div style="display:flex; justify-content:flex-end; margin-top:10px;">
-                <div style="width:250px; font-size:12px;">
-                    <div style="display:flex; justify-content:space-between; padding:4px 0;">
-                        <span style="color:#666;">Sub Total</span>
-                        <span id="inv-subtotal" style="font-weight:600;">0.00</span>
+            <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+                <div style="width:55%;">
+                    <div style="font-size:10px; margin-top:5px;">
+                        <span style="color:#64748b; font-style:italic; display:block; margin-bottom:2px;">Amount in Words:</span>
+                        <span style="font-weight:700; color:#0f172a; font-style:italic;" id="inv-words">Indian Rupee Zero Only</span>
                     </div>
-                    <div style="display:flex; justify-content:space-between; padding:4px 0;">
-                        <span style="color:#666;">Total Taxable Amount</span>
-                        <span id="inv-taxable" style="font-weight:600;">0.00</span>
+                </div>
+                <div style="width:250px; background:#f8fafc; padding:15px; border-radius:8px; border:1px solid #e2e8f0;">
+                    <div style="display:flex; justify-content:space-between; padding:3px 0; font-size:11px;">
+                        <span style="color:#64748b; font-weight:600;">Taxable Amount</span>
+                        <span id="inv-taxable" style="font-weight:700; color:#0f172a;">0.00</span>
                     </div>
-                    <div style="display:flex; justify-content:space-between; padding:4px 0;">
-                        <span style="color:#666;">IGST5 (5%)</span>
-                        <span id="inv-tax" style="font-weight:600;">0.00</span>
+                    <div style="display:flex; justify-content:space-between; padding:3px 0; font-size:11px;">
+                        <span style="color:#64748b; font-weight:600;">GST (5%)</span>
+                        <span id="inv-tax" style="font-weight:700; color:#0f172a;">0.00</span>
                     </div>
-                    <div style="display:flex; justify-content:space-between; padding:10px; background:#f5f5f5; font-weight:800; font-size:14px; margin-top:10px; border-radius:4px;">
-                        <span>Total</span>
+                    <div id="inv-delivery-row" style="display:none; justify-content:space-between; padding:3px 0; font-size:11px;">
+                        <span style="color:#64748b; font-weight:600;">Delivery Charge</span>
+                        <span id="inv-delivery" style="font-weight:700; color:#0f172a;">0.00</span>
+                    </div>
+                    <div id="inv-discount-row" style="display:none; justify-content:space-between; padding:3px 0; font-size:11px; color: #dc2626;">
+                        <span style="font-weight:600;">Discount</span>
+                        <span id="inv-discount" style="font-weight:700;">-0.00</span>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; font-weight:900; font-size:17px; color:#1a4d2e; border-top:1px solid #e2e8f0; margin-top:8px; padding-top:8px;">
+                        <span>TOTAL</span>
                         <span id="inv-total-disp">₹0.00</span>
                     </div>
                 </div>
             </div>
 
-            <!-- Words Section -->
-            <div style="margin-top:15px; text-align:right; font-size:11px;">
-                <span style="color:#666; font-style:italic;">Total In Words:</span>
-                <span style="font-weight:700; margin-left:10px; color:#111; font-style:italic;" id="inv-words">Indian Rupee Three Hundred Fifteen Only</span>
-            </div>
-
-            <!-- Divider Line -->
-            <div style="border-bottom:1px solid #eee; margin:30px 0;"></div>
-
-            <div style="display:flex; justify-content:space-between; align-items:flex-end; margin-top:40px;">
-                <div style="width:100%; font-size:10px; color:#888; text-align:center;">
-                    This is a computer generated invoice. No signature required.
+            <!-- Footer -->
+            <div style="margin-top:40px; padding-top:15px; border-top:1px solid #f1f5f9; text-align:center;">
+                <div style="font-size:10px; color:#94a3b8; font-weight:500;">
+                    Computer generated invoice. No signature required.<br>
+                    Thank you for choosing <span style="color:#1a4d2e; font-weight:700;">Farmmily</span>!
                 </div>
             </div>
         </div>
+    </div>
+    </div>
     <!-- Shipping Bill Template (Hidden) -->
     <div id="shipping-bill-template" style="display:none">
         <div style="text-align:center; font-size:20px; font-weight:900; border-bottom:2.5px solid #000; padding-bottom:12px; margin-bottom:20px; letter-spacing:1px; text-transform: uppercase;">
