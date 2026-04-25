@@ -388,6 +388,22 @@ function navigateTo(pageId, push = true) {
             window.history.pushState({ pageId }, '', hash || window.location.pathname);
         }
     }
+
+    // Trigger data rendering for specific pages
+    switch(pageId) {
+        case 'dashboard': renderDashboard(); break;
+        case 'all-orders': renderOrders(); break;
+        case 'all-products': renderProducts(); break;
+        case 'categories': renderCategories(); break;
+        case 'inventory': renderInventory(); break;
+        case 'customers': renderCustomers(); break;
+        case 'reports': renderProductReport(); renderCODReport(); break;
+        case 'coupons': renderCoupons(); break;
+        case 'banners': renderBanners(); break;
+        case 'reviews': renderReviews(); break;
+        case 'corporate': renderCorpOrders(); break;
+        case 'delivery': renderDelivery(); break;
+    }
 }
 
 function syncUrl(pageId) {
@@ -678,8 +694,14 @@ async function upsertVariantsWithFallback(payload) {
 }
 
 async function saveProductVariants(productId, rawQuantities, pricing = {}) {
-    const quantities = parseVariantQuantities(rawQuantities);
-    const labels = quantities.map(qty => (typeof qty === 'object') ? qty.label : `${qty}kg`);
+    let quantities;
+    if (Array.isArray(rawQuantities)) {
+        quantities = rawQuantities;
+    } else {
+        quantities = parseVariantQuantities(rawQuantities);
+    }
+
+    const labels = quantities.map(v => (typeof v === 'object' && v !== null) ? v.label : `${v}kg`);
     const basePricePerKg = parseFloat(pricing.basePricePerKg || 0);
     const compareAtPerKg = parseFloat(pricing.compareAtPerKg || 0);
 
@@ -782,11 +804,13 @@ async function saveProductRecordWithFallback(productPayload, productId = null) {
         const result = await query;
         if (!result.error) return result;
 
+        console.error('Supabase Save Error:', result.error);
         const missingColumn = getMissingColumnName(result.error);
         if (!missingColumn || !(missingColumn in sanitizedPayload)) {
             return result;
         }
 
+        console.warn(`Surgically removing column "${missingColumn}" from payload to attempt partial save.`);
         delete sanitizedPayload[missingColumn];
     }
 
@@ -2479,25 +2503,67 @@ function addCustomSizePair() {
 /**
  * Handles uploading extra (2nd and 3rd) product images to the slot preview.
  */
-function handleExtraImageUpload(inputEl, previewId) {
-    const file = inputEl.files[0];
+async function handleExtraImageUpload(inputEl, previewId) {
+    let file = inputEl.files[0];
     if (!file) return;
     
-    const reader = new FileReader();
-    reader.onload = (e) => {
-        const preview = document.getElementById(previewId);
-        if (!preview) return;
-        preview.src = e.target.result;
-        preview.style.display = 'block';
-        
-        // Hide placeholder icon if visible
-        const slot = preview.closest('.ap-img-slot');
-        if (slot) {
-            const placeholder = slot.querySelector('.ap-img-placeholder');
-            if (placeholder) placeholder.style.display = 'none';
-        }
+    const preview = document.getElementById(previewId);
+    let slot = preview ? preview.closest('.ap-img-slot') : null;
+    let uploadingOverlay = null;
+
+    // Show temporary processing state
+    if(slot) {
+        slot.classList.add('ap-img-uploading');
+        uploadingOverlay = document.createElement('div');
+        uploadingOverlay.className = 'ap-img-overlay ap-img-uploading-overlay';
+        uploadingOverlay.innerHTML = '<i class="ph ph-circle-notch spinner"></i>';
+        uploadingOverlay.style.cssText = 'opacity:1; background:rgba(45,106,79,0.3);';
+        slot.appendChild(uploadingOverlay);
+    }
+
+    const cleanup = () => {
+        if(slot) slot.classList.remove('ap-img-uploading');
+        if(uploadingOverlay) uploadingOverlay.remove();
+        if(timeout) clearTimeout(timeout);
     };
-    reader.readAsDataURL(file);
+
+    const timeout = setTimeout(() => {
+        cleanup();
+        showToast('Processing timeout.', 'warning');
+    }, 15000);
+
+    try {
+        // --- HEIC/HEIF Support ---
+        const isHEIC = file.name.toLowerCase().endsWith('.heic') || file.name.toLowerCase().endsWith('.heif') || file.type === 'image/heic' || file.type === 'image/heif';
+        
+        if(isHEIC) {
+            if(typeof heic2any === 'function') {
+                showToast('Converting HEIC...', 'info');
+                const convertedBlob = await heic2any({ blob: file, toType: "image/jpeg", quality: 0.7 });
+                file = Array.isArray(convertedBlob) ? convertedBlob[0] : convertedBlob;
+            } else {
+                showToast('HEIC converter loading. Please wait 2s and try again.', 'warning');
+                cleanup();
+                return;
+            }
+        }
+
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            if (preview) {
+                preview.src = e.target.result;
+                preview.style.display = 'block';
+                const placeholder = slot?.querySelector('.ap-img-placeholder');
+                if (placeholder) placeholder.style.display = 'none';
+            }
+            cleanup();
+        };
+        reader.onerror = () => { cleanup(); showToast('Read error', 'error'); };
+        reader.readAsDataURL(file);
+    } catch (err) {
+        console.error('Extra image processing error:', err);
+        cleanup();
+    }
 }
 
 /**
@@ -2599,7 +2665,7 @@ async function editProduct(id) {
     
     // Star Rating Fields
     form.elements['rating'].value = p.rating || '5.0';
-    form.elements['review_count'].value = p.review    // Load Crate Builder Slots if applicable
+    // Load Crate Builder Slots if applicable
     if (pType === 'custom_box') {
         const { data: variants } = await supabaseClient.from('product_variants').select('*').eq('product_id', id).order('id', { ascending: true });
         
@@ -2609,27 +2675,36 @@ async function editProduct(id) {
 
             variants.forEach(v => {
                 const label = v.label || '';
-                // Split label (e.g. "7Kg") into value and unit
-                const match = label.match(/^(\d+)(.*)$/);
-                const val = match ? match[1] : '3';
-                const unit = match ? match[2] : 'Kg';
+                
+                // Case 1: Variety Pool Item (e.g. "VarietyPool: Imam Pasand")
+                if (label.startsWith('VarietyPool:')) {
+                    const varietyName = label.replace('VarietyPool:', '').trim();
+                    // For variety pool items, we'll put them in the FIRST available group or create a default '3Kg' one
+                    // In a better UI we'd have a separate section, but we'll stick to the current grouping for now
+                    let groupId = 'group-3Kg';
+                    if (!document.getElementById(groupId)) addNewWeightGroup(3, 'Kg');
+                    
+                    const list = document.querySelector(`#${groupId} .crate-slots-list`);
+                    addCrateSlotToGroup(groupId, 3, 'Kg');
+                    const targetSlot = list.lastElementChild;
+                    
+                    if (targetSlot) {
+                        targetSlot.querySelector('.custom-var-id').value = v.sku || varietyName;
+                        targetSlot.querySelector('.custom-var-price').value = v.price || '';
+                    }
+                } 
+                // Case 2: Box Size Item (e.g. "3Kg Box" or just "3Kg")
+                else {
+                    const match = label.match(/^(\d+)(.*)$/);
+                    const val = match ? match[1] : '3';
+                    const unit = match ? (match[2].includes('Box') ? match[2].replace('Box','').trim() : match[2]) : 'Kg';
 
-                const groupId = `group-${val}${unit}`.replace(/[^a-zA-Z0-9]/g, '');
-                if (!document.getElementById(groupId)) {
-                    addNewWeightGroup(val, unit);
-                }
-
-                const list = document.querySelector(`#${groupId} .crate-slots-list`);
-                // Find first slot in this group without an ID, or add new one
-                let targetSlot = Array.from(list.querySelectorAll('.crate-slot')).find(s => !s.querySelector('.custom-var-id').value);
-                if (!targetSlot) {
-                    addCrateSlotToGroup(groupId, val, unit);
-                    targetSlot = list.lastElementChild;
-                }
-
-                if (targetSlot) {
-                    targetSlot.querySelector('.custom-var-id').value = v.sku || '';
-                    targetSlot.querySelector('.custom-var-price').value = v.price || '';
+                    const groupId = `group-${val}${unit}`.replace(/[^a-zA-Z0-9]/g, '');
+                    if (!document.getElementById(groupId)) {
+                        addNewWeightGroup(val, unit);
+                    }
+                    // Box sizes are often just placeholders in this UI, 
+                    // we don't necessarily need to add a slot for the size itself unless it has a variety
                 }
             });
         }
@@ -2659,20 +2734,40 @@ async function saveProduct(event) {
     if (productType === 'custom_box') {
         const groupContainer = document.getElementById('size-groups-container');
         const allSlots = groupContainer?.querySelectorAll('.crate-slot') || [];
+        const allGroups = groupContainer?.querySelectorAll('.size-group-section') || [];
         
         customVariantPayload = [];
+        
+        // 1. Save Box Sizes (e.g. "3kg Box", "5kg Box")
+        allGroups.forEach(group => {
+            const titleText = group.querySelector('.crate-group-title')?.textContent || '';
+            const match = titleText.match(/(\d+)(Kg|L|g)/i);
+            if (match) {
+                const val = match[1];
+                const unit = match[2];
+                customVariantPayload.push({
+                    label: `${val}${unit} Box`,
+                    quantity_kg: parseFloat(val) || 0,
+                    price: 0, // Parent box itself is usually 0, variety prices added
+                    is_default: val == '3'
+                });
+                variantQuantities.push(`${val}${unit}`);
+            }
+        });
+
+        // 2. Save Variety Pool Items (with VarietyPool: prefix)
+        const uniqueVarieties = new Set();
         allSlots.forEach(slot => {
             const idInput = slot.querySelector('.custom-var-id');
-            const sizeInput = slot.querySelector('.custom-var-size');
-            const unitInput = slot.querySelector('.custom-var-unit');
             const priceInput = slot.querySelector('.custom-var-price');
 
-            const sku = idInput?.value?.trim();
-            if (sku) {
-                const label = `${sizeInput?.value || ''}${unitInput?.value || 'Kg'}`;
+            const varietyValue = idInput?.value?.trim();
+            if (varietyValue && !uniqueVarieties.has(varietyValue)) {
+                uniqueVarieties.add(varietyValue);
                 customVariantPayload.push({
-                    label: label,
-                    sku: sku,
+                    label: `VarietyPool: ${varietyValue}`,
+                    sku: varietyValue.toLowerCase().substring(0, 4),
+                    quantity_kg: 1,
                     price: parseFloat(priceInput?.value) || 0
                 });
                 variantQuantities.push(label);
@@ -3078,107 +3173,129 @@ if(reviewForm) {
 
 // --- Image Upload & Compression ---
 async function handleFileUpload(input, targetInputNameOrId, previewId) {
-    const file = input.files[0];
+    let file = input.files[0];
     if(!file) return;
 
     const preview = document.getElementById(previewId);
+    let slot = null;
+    let uploadingOverlay = null;
 
-    // Show uploading state on the image preview slot
     if(preview) {
-        const slot = preview.closest('.ap-img-slot');
+        slot = preview.closest('.ap-img-slot');
         if(slot) {
             slot.classList.add('ap-img-uploading');
             slot.querySelector('.ap-img-overlay')?.remove();
-            const uploading = document.createElement('div');
-            uploading.className = 'ap-img-overlay ap-img-uploading-overlay';
-            uploading.innerHTML = '<i class="ph ph-circle-notch spinner"></i><span>Uploading...</span>';
-            uploading.style.cssText = 'opacity:1; background:rgba(45,106,79,0.75);';
-            slot.appendChild(uploading);
+            uploadingOverlay = document.createElement('div');
+            uploadingOverlay.className = 'ap-img-overlay ap-img-uploading-overlay';
+            uploadingOverlay.innerHTML = '<i class="ph ph-circle-notch spinner"></i><span>Processing...</span>';
+            uploadingOverlay.style.cssText = 'opacity:1; background:rgba(45,106,79,0.75);';
+            slot.appendChild(uploadingOverlay);
         }
     }
 
-    const reader = new FileReader();
-    reader.onload = async (e) => {
-        const img = new Image();
-        img.onload = async () => {
-            // Compress using Canvas
-            const canvas = document.createElement('canvas');
-            const MAX_WIDTH = 800;
-            const MAX_HEIGHT = 800;
-            let width = img.width;
-            let height = img.height;
+    // Comprehensive Cleanup
+    const cleanup = () => {
+        if(slot) slot.classList.remove('ap-img-uploading');
+        if(uploadingOverlay) uploadingOverlay.remove();
+        if(timeout) clearTimeout(timeout);
+    };
 
-            if (width > height) {
-                if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; }
+    // Safety Timeout (20 seconds)
+    const timeout = setTimeout(() => {
+        if(slot && slot.classList.contains('ap-img-uploading')) {
+            cleanup();
+            showToast('Processing took too long. Try a smaller file or standard format.', 'warning');
+        }
+    }, 20000);
+
+    try {
+        // --- HEIC/HEIF Support ---
+        const isHEIC = file.name.toLowerCase().endsWith('.heic') || file.name.toLowerCase().endsWith('.heif') || file.type === 'image/heic' || file.type === 'image/heif';
+        
+        if(isHEIC) {
+            if(typeof heic2any === 'function') {
+                console.log('Converting HEIC image...');
+                const convertedBlob = await heic2any({ blob: file, toType: "image/jpeg", quality: 0.7 });
+                file = Array.isArray(convertedBlob) ? convertedBlob[0] : convertedBlob;
             } else {
-                if (height > MAX_HEIGHT) { width *= MAX_HEIGHT / height; height = MAX_HEIGHT; }
+                showToast('HEIC converter not ready. Please try again in a few seconds.', 'warning');
+                cleanup();
+                return;
             }
+        }
 
-            canvas.width = width;
-            canvas.height = height;
-            const ctx = canvas.getContext('2d');
-            ctx.drawImage(img, 0, 0, width, height);
+        const reader = new FileReader();
+        reader.onerror = () => { cleanup(); showToast('Failed to read file.', 'error'); };
+        reader.onload = async (e) => {
+            const img = new Image();
+            img.onerror = () => {
+                cleanup();
+                showToast('Unsupported image format.', 'error');
+            };
 
-            const dataUrl = canvas.toDataURL('image/jpeg', 0.82);
-
-            // Update the hidden URL input field
-            const target = document.querySelector(`input[name="${targetInputNameOrId}"]`) || document.getElementById(targetInputNameOrId);
-            if(target) {
-                target.value = dataUrl;
-                target.dispatchEvent(new Event('input'));
-            }
-
-            // Update preview
-            if(preview) {
-                preview.src = dataUrl;
-                preview.style.display = 'block';
-                // Remove uploading overlay, restore hover overlay
-                const slot = preview.closest('.ap-img-slot');
-                if(slot) {
-                    slot.classList.remove('ap-img-uploading');
-                    const uploadingOverlay = slot.querySelector('.ap-img-uploading-overlay');
-                    if(uploadingOverlay) uploadingOverlay.remove();
-                }
-            }
-
-            // ─── AUTO-SAVE to DB if editing an existing product ──────────────
-            if(editingProductId && targetInputNameOrId === 'image_url') {
+            img.onload = async () => {
                 try {
-                    showToast('Saving image to product...', 'info');
+                    const canvas = document.createElement('canvas');
+                    const MAX_WIDTH = 800;
+                    const MAX_HEIGHT = 800;
+                    let width = img.width;
+                    let height = img.height;
 
-                    const { error } = await supabaseClient
-                        .from('products')
-                        .update({ image_url: dataUrl, updated_at: new Date().toISOString() })
-                        .eq('id', editingProductId);
-
-                    if(error) throw error;
-
-                    // Sync with other products that have the same SKU (family variants)
-                    const currentProduct = allProducts.find(p => p.id == editingProductId);
-                    if(currentProduct && currentProduct.sku) {
-                        await syncSameNamedProducts(currentProduct.sku, dataUrl);
+                    if (width > height) {
+                        if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; }
+                    } else {
+                        if (height > MAX_HEIGHT) { width *= MAX_HEIGHT / height; height = MAX_HEIGHT; }
                     }
 
-                    // Update local cache (for all products with this SKU)
-                    allProducts.forEach(p => {
-                        if (currentProduct && p.sku === currentProduct.sku) {
-                            p.image_url = dataUrl;
-                        }
-                    });
+                    canvas.width = width;
+                    canvas.height = height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, width, height);
 
-                    showToast('✅ Image updated! All variants synced.', 'success');
-                    renderProducts(); // Refresh the table instantly
-                } catch(err) {
-                    console.error('Image save error:', err);
-                    showToast('Image loaded but not saved — click Save Product to apply.', 'warning');
+                    const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+
+                    // Update input
+                    const target = document.querySelector(`input[name="${targetInputNameOrId}"]`) || document.getElementById(targetInputNameOrId);
+                    if(target) {
+                        target.value = dataUrl;
+                        target.dispatchEvent(new Event('input'));
+                    }
+
+                    // Update preview
+                    if(preview) {
+                        preview.src = dataUrl;
+                        preview.style.display = 'block';
+                    }
+
+                    cleanup();
+
+                    // --- Auto-Save ---
+                    if(editingProductId && targetInputNameOrId === 'image_url') {
+                        showToast('Saving to product...', 'info');
+                        const { error } = await supabaseClient.from('products').update({ image_url: dataUrl, updated_at: new Date().toISOString() }).eq('id', editingProductId);
+                        if(error) throw error;
+
+                        const currentProduct = allProducts.find(p => p.id == editingProductId);
+                        if(currentProduct?.sku) await syncSameNamedProducts(currentProduct.sku, dataUrl);
+
+                        showToast('✅ Product Image Updated!', 'success');
+                        renderProducts();
+                    } else {
+                        showToast('Image ready! Click Save Product to finalize.');
+                    }
+                } catch (procErr) {
+                    cleanup();
+                    showToast('Processing error.', 'error');
                 }
-            } else {
-                showToast('Image ready 🖼️ — click Save Product to apply.');
-            }
+            };
+            img.src = e.target.result;
         };
-        img.src = e.target.result;
-    };
-    reader.readAsDataURL(file);
+        reader.readAsDataURL(file);
+    } catch (err) {
+        console.error('Upload Error:', err);
+        cleanup();
+        showToast('Upload failed.', 'error');
+    }
 }
 
 // ============================================================
