@@ -2414,7 +2414,7 @@ function resetProductForm() {
     if (preview) preview.src = 'https://placehold.co/200x200/f1f5f9/94a3b8?text=Upload';
 
     // Reset extra image slots
-    ['img-preview-2', 'img-preview-3'].forEach(id => {
+    ['img-preview-2', 'img-preview-3'].forEach((id, idx) => {
         const el = document.getElementById(id);
         if (el) { el.src = ''; el.style.display = 'none'; }
         const slot = el?.closest('.ap-img-slot');
@@ -2422,6 +2422,9 @@ function resetProductForm() {
             const placeholder = slot.querySelector('.ap-img-placeholder');
             if (placeholder) placeholder.style.display = 'flex';
         }
+        // Also clear hidden inputs
+        const hidden = document.getElementById(`image-url-${idx + 2}-hidden`);
+        if (hidden) hidden.value = '';
     });
 
     const title = document.getElementById('pm-title');
@@ -2572,11 +2575,12 @@ function addCustomSizePair() {
  * Handles uploading extra (2nd and 3rd) product images to the slot preview.
  * Refactored to use Supabase Storage for better persistence and optimization.
  */
-async function handleExtraImageUpload(inputEl, previewId) {
+async function handleExtraImageUpload(inputEl, previewId, hiddenInputId) {
     let file = inputEl.files[0];
     if (!file) return;
     
     const preview = document.getElementById(previewId);
+    const hiddenInput = document.getElementById(hiddenInputId);
     let slot = preview ? preview.closest('.ap-img-slot') : null;
     let uploadingOverlay = null;
 
@@ -2654,6 +2658,10 @@ async function handleExtraImageUpload(inputEl, previewId) {
                     preview.style.display = 'block';
                     const placeholder = slot?.querySelector('.ap-img-placeholder');
                     if (placeholder) placeholder.style.display = 'none';
+                }
+
+                if (hiddenInput) {
+                    hiddenInput.value = publicUrl;
                 }
                 
                 showToast('Extra image uploaded successfully!');
@@ -2816,6 +2824,39 @@ async function editProduct(id) {
     const preview = document.getElementById('img-preview');
     if(preview) preview.src = p.image_url || 'https://placehold.co/200x200/f1f5f9/94a3b8?text=Upload';
 
+    // Extra images
+    const preview2 = document.getElementById('img-preview-2');
+    const hidden2 = document.getElementById('image-url-2-hidden');
+    if (preview2) {
+        if (p.image_url_2) {
+            preview2.src = p.image_url_2;
+            preview2.style.display = 'block';
+            preview2.closest('.ap-img-slot')?.querySelector('.ap-img-placeholder')?.setAttribute('style', 'display:none');
+            if(hidden2) hidden2.value = p.image_url_2;
+        } else {
+            preview2.src = '';
+            preview2.style.display = 'none';
+            preview2.closest('.ap-img-slot')?.querySelector('.ap-img-placeholder')?.setAttribute('style', 'display:flex');
+            if(hidden2) hidden2.value = '';
+        }
+    }
+
+    const preview3 = document.getElementById('img-preview-3');
+    const hidden3 = document.getElementById('image-url-3-hidden');
+    if (preview3) {
+        if (p.image_url_3) {
+            preview3.src = p.image_url_3;
+            preview3.style.display = 'block';
+            preview3.closest('.ap-img-slot')?.querySelector('.ap-img-placeholder')?.setAttribute('style', 'display:none');
+            if(hidden3) hidden3.value = p.image_url_3;
+        } else {
+            preview3.src = '';
+            preview3.style.display = 'none';
+            preview3.closest('.ap-img-slot')?.querySelector('.ap-img-placeholder')?.setAttribute('style', 'display:flex');
+            if(hidden3) hidden3.value = '';
+        }
+    }
+
     document.getElementById('pm-title').innerText = 'Edit Product: ' + p.name;
     document.getElementById('save-product-btn').innerHTML = '<i class="ph ph-floppy-disk"></i> Update Product';
     
@@ -2899,6 +2940,8 @@ async function saveProduct(event) {
         slug:                    form.elements['slug'].value.trim(),
         description:             form.elements['description']?.value || null,
         image_url:               form.elements['image_url']?.value || null,
+        image_url_2:             form.elements['image_url_2']?.value || null,
+        image_url_3:             form.elements['image_url_3']?.value || null,
         base_price:              basePricePerKg,
         base_price_per_kg:       basePricePerKg,
         compare_at_price_per_kg: compareAtPerKg || null,

@@ -437,12 +437,14 @@
                                         <div class="ap-img-slot" onclick="document.getElementById('prod-file-2').click()" title="Extra image 2">
                                             <img id="img-preview-2" src="" alt="" style="display:none">
                                             <div class="ap-img-placeholder"><i class="ph ph-image"></i></div>
-                                            <input type="file" id="prod-file-2" style="display:none" accept="image/*" onchange="handleExtraImageUpload(this, 'img-preview-2')">
+                                            <input type="hidden" name="image_url_2" id="image-url-2-hidden">
+                                            <input type="file" id="prod-file-2" style="display:none" accept="image/*" onchange="handleExtraImageUpload(this, 'img-preview-2', 'image-url-2-hidden')">
                                         </div>
                                         <div class="ap-img-slot" onclick="document.getElementById('prod-file-3').click()" title="Extra image 3">
                                             <img id="img-preview-3" src="" alt="" style="display:none">
                                             <div class="ap-img-placeholder"><i class="ph ph-image"></i></div>
-                                            <input type="file" id="prod-file-3" style="display:none" accept="image/*" onchange="handleExtraImageUpload(this, 'img-preview-3')">
+                                            <input type="hidden" name="image_url_3" id="image-url-3-hidden">
+                                            <input type="file" id="prod-file-3" style="display:none" accept="image/*" onchange="handleExtraImageUpload(this, 'img-preview-3', 'image-url-3-hidden')">
                                         </div>
                                     </div>
                                 </div>
