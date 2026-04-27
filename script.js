@@ -402,6 +402,12 @@ function navigateTo(pageId, push = true) {
         }
     }
 
+    // --- Mobile: Auto-close sidebar on navigate ---
+    if (window.innerWidth <= 768) {
+        const sidebar = document.getElementById('sidebar');
+        if (sidebar) sidebar.classList.remove('show');
+    }
+
     // Trigger data rendering for specific pages
     switch(pageId) {
         case 'dashboard': renderDashboard(); break;
@@ -462,11 +468,18 @@ window.onpopstate = function(event) {
     }
 };
 
-document.querySelectorAll('[data-page]').forEach(el => {
-    el.addEventListener('click', (e) => {
-        if(el.classList.contains('has-sub') && window.innerWidth > 768) return; 
-        if(el.dataset.page) navigateTo(el.dataset.page);
-    });
+document.addEventListener('click', (e) => {
+    const navItem = e.target.closest('[data-page]');
+    if (!navItem) return;
+
+    // If it's a sub-menu toggle on desktop, don't navigate
+    if (navItem.classList.contains('has-sub') && window.innerWidth > 768) return;
+
+    const pageId = navItem.dataset.page;
+    if (pageId) {
+        console.log(`🖱️ Clicked nav item: ${pageId}`);
+        navigateTo(pageId);
+    }
 });
 
 function toggleSubMenu(el) { el.classList.toggle('open'); }
@@ -2007,15 +2020,46 @@ async function saveBanner() {
         sort_order: parseInt(form.elements['sort_order'].value || 1),
         active: true
     };
-    if(!obj.title || !obj.image_url) { showToast("Title and Image URL are required", 'warning'); return; }
+    
+    if(!obj.title || !obj.image_url) { 
+        showToast("Title and Image URL are required", 'warning'); 
+        return; 
+    }
 
-    const { error } = await supabaseClient.from('banners').insert([obj]);
-    if(error) showToast("Error saving banner", 'error');
-    else {
+    const btn = document.querySelector('#bannerModal .btn-primary');
+    if(btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="ph ph-circle-notch spinner-white"></i> Saving...';
+    }
+
+    try {
+        const { data, error } = await supabaseClient.from('banners').insert([obj]);
+        if(error) throw error;
+        
         showToast("Banner added successfully ✅");
         closeModal('bannerModal');
         renderBanners();
+    } catch(err) {
+        showToast("Error saving banner: " + err.message, 'error');
+    } finally {
+        if(btn) {
+            btn.disabled = false;
+            btn.innerHTML = 'Save';
+        }
     }
+}
+
+function openBannerModal() {
+    const form = document.getElementById('banner-form');
+    if(form) form.reset();
+    const preview = document.getElementById('banner-img-preview');
+    if(preview) {
+        preview.src = '';
+        preview.style.display = 'none';
+    }
+    const urlInput = document.getElementById('banner-image-url');
+    if(urlInput) urlInput.value = '';
+    openModal('bannerModal');
 }
 
 
@@ -2277,6 +2321,14 @@ async function viewOrder(id) {
                                 <i class="ph ph-seal-check" style="font-size:1.2rem; color:#22c55e;"></i>
                                 <span style="font-size:0.9rem; font-weight:600; color:#166534;">Free Delivery</span>
                             </div>
+                            <style>
+                                .nav-item i, .nav-item span, .sub-nav-item {
+                                    pointer-events: none;
+                                }
+                                .nav-item, .sub-nav-item[data-page] {
+                                    pointer-events: auto;
+                                }
+                            </style>
                             <div style="font-weight:800; color:#22c55e; font-size:0.8rem; text-transform:uppercase;">Applied</div>
                         </div>
                     `;
@@ -2516,6 +2568,10 @@ function addCustomSizePair() {
 /**
  * Handles uploading extra (2nd and 3rd) product images to the slot preview.
  */
+/**
+ * Handles uploading extra (2nd and 3rd) product images to the slot preview.
+ * Refactored to use Supabase Storage for better persistence and optimization.
+ */
 async function handleExtraImageUpload(inputEl, previewId) {
     let file = inputEl.files[0];
     if (!file) return;
@@ -2529,8 +2585,8 @@ async function handleExtraImageUpload(inputEl, previewId) {
         slot.classList.add('ap-img-uploading');
         uploadingOverlay = document.createElement('div');
         uploadingOverlay.className = 'ap-img-overlay ap-img-uploading-overlay';
-        uploadingOverlay.innerHTML = '<i class="ph ph-circle-notch spinner"></i>';
-        uploadingOverlay.style.cssText = 'opacity:1; background:rgba(45,106,79,0.3);';
+        uploadingOverlay.innerHTML = '<i class="ph ph-circle-notch spinner"></i><span>Uploading...</span>';
+        uploadingOverlay.style.cssText = 'opacity:1; background:rgba(45,106,79,0.75); display:flex; flex-direction:column; align-items:center; justify-content:center; position:absolute; inset:0; z-index:10; color:white;';
         slot.appendChild(uploadingOverlay);
     }
 
@@ -2543,7 +2599,7 @@ async function handleExtraImageUpload(inputEl, previewId) {
     const timeout = setTimeout(() => {
         cleanup();
         showToast('Processing timeout.', 'warning');
-    }, 15000);
+    }, 30000);
 
     try {
         // --- HEIC/HEIF Support ---
@@ -2554,27 +2610,61 @@ async function handleExtraImageUpload(inputEl, previewId) {
                 showToast('Converting HEIC...', 'info');
                 const convertedBlob = await heic2any({ blob: file, toType: "image/jpeg", quality: 0.7 });
                 file = Array.isArray(convertedBlob) ? convertedBlob[0] : convertedBlob;
-            } else {
-                showToast('HEIC converter loading. Please wait 2s and try again.', 'warning');
-                cleanup();
-                return;
             }
         }
 
+        // --- Compression & Upload ---
         const reader = new FileReader();
-        reader.onload = (e) => {
-            if (preview) {
-                preview.src = e.target.result;
-                preview.style.display = 'block';
-                const placeholder = slot?.querySelector('.ap-img-placeholder');
-                if (placeholder) placeholder.style.display = 'none';
-            }
-            cleanup();
+        reader.onload = async (e) => {
+            const img = new Image();
+            img.onload = async () => {
+                const canvas = document.createElement('canvas');
+                const MAX_WIDTH = 1000;
+                const MAX_HEIGHT = 1000;
+                let width = img.width;
+                let height = img.height;
+
+                if (width > height) {
+                    if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; }
+                } else {
+                    if (height > MAX_HEIGHT) { width *= MAX_HEIGHT / height; height = MAX_HEIGHT; }
+                }
+
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, width, height);
+
+                // Convert to Blob for upload
+                const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+                const blob = dataURLtoBlob(dataUrl);
+                
+                // Upload to Supabase
+                const fileName = `products/extra_${Date.now()}_${file.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
+                const { data, error } = await supabaseClient.storage
+                    .from('products')
+                    .upload(fileName, blob, { contentType: 'image/jpeg', upsert: true });
+
+                if (error) throw error;
+
+                const { data: { publicUrl } } = supabaseClient.storage.from('products').getPublicUrl(fileName);
+
+                if (preview) {
+                    preview.src = publicUrl;
+                    preview.style.display = 'block';
+                    const placeholder = slot?.querySelector('.ap-img-placeholder');
+                    if (placeholder) placeholder.style.display = 'none';
+                }
+                
+                showToast('Extra image uploaded successfully!');
+                cleanup();
+            };
+            img.src = e.target.result;
         };
-        reader.onerror = () => { cleanup(); showToast('Read error', 'error'); };
         reader.readAsDataURL(file);
     } catch (err) {
-        console.error('Extra image processing error:', err);
+        console.error('Extra image upload error:', err);
+        showToast('Extra image upload failed', 'error');
         cleanup();
     }
 }
@@ -3175,6 +3265,11 @@ if(reviewForm) {
 }
 
 // --- Image Upload & Compression ---
+/**
+ * Main file upload handler refactored to use Supabase Storage.
+ * Stores files in the 'products' bucket under folders (products/ or categories/).
+ * Prevents local path issues and database bloat from Base64 strings.
+ */
 async function handleFileUpload(input, targetInputNameOrId, previewId) {
     let file = input.files[0];
     if(!file) return;
@@ -3184,32 +3279,31 @@ async function handleFileUpload(input, targetInputNameOrId, previewId) {
     let uploadingOverlay = null;
 
     if(preview) {
-        slot = preview.closest('.ap-img-slot');
+        // Find slot or parent for categories
+        slot = preview.closest('.ap-img-slot') || preview.parentElement;
         if(slot) {
             slot.classList.add('ap-img-uploading');
             slot.querySelector('.ap-img-overlay')?.remove();
             uploadingOverlay = document.createElement('div');
             uploadingOverlay.className = 'ap-img-overlay ap-img-uploading-overlay';
-            uploadingOverlay.innerHTML = '<i class="ph ph-circle-notch spinner"></i><span>Processing...</span>';
-            uploadingOverlay.style.cssText = 'opacity:1; background:rgba(45,106,79,0.75);';
+            uploadingOverlay.innerHTML = '<i class="ph ph-circle-notch spinner"></i><span>Uploading...</span>';
+            uploadingOverlay.style.cssText = 'opacity:1; background:rgba(45,106,79,0.75); display:flex; flex-direction:column; align-items:center; justify-content:center; position:absolute; inset:0; z-index:10; color:white;';
             slot.appendChild(uploadingOverlay);
         }
     }
 
-    // Comprehensive Cleanup
     const cleanup = () => {
         if(slot) slot.classList.remove('ap-img-uploading');
         if(uploadingOverlay) uploadingOverlay.remove();
         if(timeout) clearTimeout(timeout);
     };
 
-    // Safety Timeout (20 seconds)
     const timeout = setTimeout(() => {
         if(slot && slot.classList.contains('ap-img-uploading')) {
             cleanup();
-            showToast('Processing took too long. Try a smaller file or standard format.', 'warning');
+            showToast('Upload took too long. Check your connection.', 'warning');
         }
-    }, 20000);
+    }, 45000); // 45s for larger uploads
 
     try {
         // --- HEIC/HEIF Support ---
@@ -3221,7 +3315,7 @@ async function handleFileUpload(input, targetInputNameOrId, previewId) {
                 const convertedBlob = await heic2any({ blob: file, toType: "image/jpeg", quality: 0.7 });
                 file = Array.isArray(convertedBlob) ? convertedBlob[0] : convertedBlob;
             } else {
-                showToast('HEIC converter not ready. Please try again in a few seconds.', 'warning');
+                showToast('HEIC converter not ready. Please try again.', 'warning');
                 cleanup();
                 return;
             }
@@ -3231,16 +3325,13 @@ async function handleFileUpload(input, targetInputNameOrId, previewId) {
         reader.onerror = () => { cleanup(); showToast('Failed to read file.', 'error'); };
         reader.onload = async (e) => {
             const img = new Image();
-            img.onerror = () => {
-                cleanup();
-                showToast('Unsupported image format.', 'error');
-            };
+            img.onerror = () => { cleanup(); showToast('Unsupported image format.', 'error'); };
 
             img.onload = async () => {
                 try {
                     const canvas = document.createElement('canvas');
-                    const MAX_WIDTH = 800;
-                    const MAX_HEIGHT = 800;
+                    const MAX_WIDTH = 1000; // Increased for better quality
+                    const MAX_HEIGHT = 1000;
                     let width = img.width;
                     let height = img.height;
 
@@ -3255,18 +3346,38 @@ async function handleFileUpload(input, targetInputNameOrId, previewId) {
                     const ctx = canvas.getContext('2d');
                     ctx.drawImage(img, 0, 0, width, height);
 
-                    const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+                    // Convert to Blob
+                    const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+                    const blob = dataURLtoBlob(dataUrl);
+
+                    // --- Upload to Supabase Storage ---
+                    const folder = targetInputNameOrId.includes('cat') ? 'categories' : 'products';
+                    const safeName = file.name.replace(/[^a-zA-Z0-9.]/g, '_');
+                    const fileName = `${folder}/${Date.now()}_${safeName}`;
+                    
+                    showToast('Finalizing upload...', 'info');
+                    
+                    const { data: uploadData, error: uploadError } = await supabaseClient.storage
+                        .from('products')
+                        .upload(fileName, blob, { contentType: 'image/jpeg', upsert: true });
+
+                    if (uploadError) throw uploadError;
+
+                    // Get Public URL
+                    const { data: { publicUrl } } = supabaseClient.storage
+                        .from('products')
+                        .getPublicUrl(fileName);
 
                     // Update input
                     const target = document.querySelector(`input[name="${targetInputNameOrId}"]`) || document.getElementById(targetInputNameOrId);
                     if(target) {
-                        target.value = dataUrl;
+                        target.value = publicUrl;
                         target.dispatchEvent(new Event('input'));
                     }
 
                     // Update preview
                     if(preview) {
-                        preview.src = dataUrl;
+                        preview.src = publicUrl;
                         preview.style.display = 'block';
                     }
 
@@ -3274,21 +3385,22 @@ async function handleFileUpload(input, targetInputNameOrId, previewId) {
 
                     // --- Auto-Save ---
                     if(editingProductId && targetInputNameOrId === 'image_url') {
-                        showToast('Saving to product...', 'info');
-                        const { error } = await supabaseClient.from('products').update({ image_url: dataUrl, updated_at: new Date().toISOString() }).eq('id', editingProductId);
+                        showToast('Syncing with database...', 'info');
+                        const { error } = await supabaseClient.from('products').update({ image_url: publicUrl, updated_at: new Date().toISOString() }).eq('id', editingProductId);
                         if(error) throw error;
 
                         const currentProduct = allProducts.find(p => p.id == editingProductId);
-                        if(currentProduct?.sku) await syncSameNamedProducts(currentProduct.sku, dataUrl);
+                        if(currentProduct?.sku) await syncSameNamedProducts(currentProduct.sku, publicUrl);
 
                         showToast('✅ Product Image Updated!', 'success');
                         renderProducts();
                     } else {
-                        showToast('Image ready! Click Save Product to finalize.');
+                        showToast('Upload successful! Click Save to finalize.');
                     }
                 } catch (procErr) {
+                    console.error('Processing error:', procErr);
                     cleanup();
-                    showToast('Processing error.', 'error');
+                    showToast('Upload failed: ' + (procErr.message || 'Unknown error'), 'error');
                 }
             };
             img.src = e.target.result;
@@ -3299,6 +3411,18 @@ async function handleFileUpload(input, targetInputNameOrId, previewId) {
         cleanup();
         showToast('Upload failed.', 'error');
     }
+}
+
+/**
+ * Helper to convert dataURL (Base64) to Blob for Supabase Storage upload
+ */
+function dataURLtoBlob(dataurl) {
+    var arr = dataurl.split(','), mime = arr[0].match(/:(.*?);/)[1],
+        bstr = atob(arr[1]), n = bstr.length, u8arr = new Uint8Array(n);
+    while(n--){
+        u8arr[n] = bstr.charCodeAt(n);
+    }
+    return new Blob([u8arr], {type:mime});
 }
 
 // ============================================================

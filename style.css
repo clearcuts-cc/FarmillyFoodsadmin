@@ -117,7 +117,7 @@ body {
 .sidebar-nav {
     flex: 1;
     overflow-y: auto;
-    padding: 20px 12px;
+    padding: 20px 12px 100px 12px; /* Extra bottom padding for mobile reachability */
     position: relative;
 }
 
@@ -136,11 +136,15 @@ body {
     transition: var(--transition);
     position: relative;
     overflow: hidden;
+    min-height: 48px;
 }
 
 .nav-item span {
-    font-size: 1.25rem;
+    font-size: 1.05rem; /* Balanced size */
     transition: transform 0.3s ease;
+}
+.nav-item i, .nav-item span, .nav-item #corp-badge {
+    pointer-events: none;
 }
 
 .nav-item:hover {

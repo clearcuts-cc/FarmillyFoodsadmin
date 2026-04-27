@@ -716,7 +716,7 @@
                 <div class="table-container">
                     <div class="table-header">
                         <span class="table-title">Home Banners</span>
-                        <button class="btn btn-primary" onclick="openModal('bannerModal')">+ Add Banner</button>
+                        <button class="btn btn-primary" onclick="openBannerModal()">+ Add Banner</button>
                     </div>
                     <table>
                         <thead><tr><th>Image</th><th>Title</th><th>Sort</th><th>Active</th><th>Actions</th></tr></thead>
@@ -949,7 +949,17 @@
                 <form id="banner-form">
                     <div class="form-group"><label class="form-label">Title</label><input type="text" name="title" class="form-control" required></div>
                     <div class="form-group"><label class="form-label">Subtitle</label><input type="text" name="subtitle" class="form-control"></div>
-                    <div class="form-group"><label class="form-label">Image URL</label><input type="text" name="image_url" class="form-control" required></div>
+                    <div class="form-group">
+                        <label class="form-label">Banner Image</label>
+                        <div style="display:flex; gap:10px; align-items:center; margin-bottom:10px">
+                            <input type="text" id="banner-image-url" name="image_url" class="form-control" style="flex:1" placeholder="Paste URL or Upload ->">
+                            <button type="button" class="btn btn-outline" onclick="document.getElementById('banner-file').click()">Upload</button>
+                            <input type="file" id="banner-file" style="display:none" accept="image/*" onchange="handleFileUpload(this, 'image_url', 'banner-img-preview')">
+                        </div>
+                        <div style="text-align:center">
+                            <img id="banner-img-preview" src="https://placehold.co/100" style="width:100%; height:120px; border-radius:12px; object-fit:cover; background:#f8fafc; border:1px dashed #cbd5e1; padding:5px; display:none;">
+                        </div>
+                    </div>
                     <div class="form-group"><label class="form-label">Sort Order</label><input type="number" name="sort_order" class="form-control" value="1"></div>
                 </form>
             </div>
