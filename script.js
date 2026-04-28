@@ -3175,11 +3175,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Live Image Previews with Google Drive conversion
     function getDirectLink(url) {
-        if(url.includes('drive.google.com')) {
-            const id = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
-            if(id && id[1]) return `https://lh3.googleusercontent.com/u/0/d/${id[1]}`;
+        if(!url) return url;
+        const trimmed = url.trim();
+        if(trimmed.includes('drive.google.com')) {
+            const match = trimmed.match(/\/d\/([a-zA-Z0-9_-]+)/) || trimmed.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+            if(match && match[1]) {
+                // Return session-independent direct link
+                return `https://lh3.googleusercontent.com/d/${match[1]}`;
+            }
         }
-        return url;
+        return trimmed;
     }
 
     const prodImgInput = document.querySelector('input[name="image_url"]');
@@ -3203,10 +3208,22 @@ document.addEventListener('DOMContentLoaded', () => {
     const catImgPreview = document.getElementById('cat-img-preview');
     if(catImgInput && catImgPreview) {
         catImgInput.addEventListener('input', (e) => {
-            const rawUrl = e.target.value.trim();
+            const rawUrl = e.target.value;
             const directUrl = getDirectLink(rawUrl);
-            if(rawUrl !== directUrl) e.target.value = directUrl; // Auto-convert the input too
+            if(rawUrl !== directUrl) e.target.value = directUrl;
             catImgPreview.src = directUrl || 'https://placehold.co/100';
+        });
+    }
+
+    const bannerImgInput = document.getElementById('banner-image-url');
+    const bannerImgPreview = document.getElementById('banner-img-preview');
+    if(bannerImgInput && bannerImgPreview) {
+        bannerImgInput.addEventListener('input', (e) => {
+            const rawUrl = e.target.value;
+            const directUrl = getDirectLink(rawUrl);
+            if(rawUrl !== directUrl) e.target.value = directUrl;
+            bannerImgPreview.src = directUrl || 'https://placehold.co/100';
+            bannerImgPreview.style.display = directUrl ? 'block' : 'none';
         });
     }
 
