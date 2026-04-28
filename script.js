@@ -3178,10 +3178,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if(!url) return url;
         const trimmed = url.trim();
         if(trimmed.includes('drive.google.com')) {
-            const match = trimmed.match(/\/d\/([a-zA-Z0-9_-]+)/) || trimmed.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+            const match = trimmed.match(/(?:id=|\/d\/|folders\/)([a-zA-Z0-9_-]{25,})/);
             if(match && match[1]) {
-                // Return session-independent direct link
-                return `https://lh3.googleusercontent.com/d/${match[1]}`;
+                return `https://drive.google.com/thumbnail?id=${match[1]}&sz=w1000`;
             }
         }
         return trimmed;
