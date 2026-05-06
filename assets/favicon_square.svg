@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <style>
+      .bg { fill: #176836; }
+      .letter { fill: #ffffff; }
+    </style>
+  </defs>
+  <circle class="bg" cx="256" cy="256" r="240" />
+  <path class="letter" d="M328,124 H192 c-4,0-8,4-8,8 v256 c0,4,4,8,8,8 h40 c4,0,8-4,8-8 v-100 h70 c4,0,8-4,8-8 v-45 c0-4-4-8-8-8 h-70 v-45 h86 c4,0,8-4,8-8 v-45 c0-4-4-8-8-8 Z" />
+</svg>

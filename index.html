@@ -22,7 +22,7 @@
             <div style="margin-bottom: 24px;">
                 <img src="assets/farmmily%20logo.png" alt="Farmmily Logo" style="width: 80px; height: auto; margin-bottom: 16px;">
                 <h2>Welcome Back</h2>
-                <p>Enter your admin email to receive a secure login link</p>
+                <p>Enter your admin credentials to access the dashboard</p>
             </div>
             
             <form onsubmit="event.preventDefault(); handleLogin();">
@@ -35,7 +35,9 @@
                     <label class="form-label">Password</label>
                     <div style="position:relative">
                         <input type="password" id="login-password" class="form-control" placeholder="••••••••" required style="padding-right: 45px;">
-                        <i class="ph ph-eye" id="toggle-password" style="position:absolute; right:15px; top:50%; transform:translateY(-50%); cursor:pointer; color:var(--text-muted); font-size:1.2rem; transition:var(--transition); z-index: 10;"></i>
+                        <button type="button" id="toggle-password" onclick="toggleLoginPassword(this)" style="position:absolute; right:10px; top:50%; transform:translateY(-50%); background:none; border:none; cursor:pointer; color:var(--text-muted); padding:5px; display:flex; align-items:center; justify-content:center; z-index:10;">
+                            <i class="ph ph-eye" style="font-size:1.2rem;"></i>
+                        </button>
                     </div>
                 </div>
                 
@@ -111,6 +113,9 @@
 
             <div class="nav-item" data-page="banners">
                 <i class="ph ph-image"></i> <span>Banners</span>
+            </div>
+            <div class="nav-item" data-page="gallery">
+                <i class="ph ph-images"></i> <span>Gallery</span>
             </div>
             <div class="nav-item" data-page="reviews">
                 <i class="ph ph-star"></i> <span>Reviews</span>
@@ -727,6 +732,34 @@
                 </div>
             </div>
 
+            <!-- Gallery Page -->
+            <div id="page-gallery" class="page">
+                <div class="card" style="margin-bottom: 24px; background: linear-gradient(to right, #f8fafc, #eff6ff);">
+                    <div style="display:flex; justify-content:space-between; align-items:center; padding:15px 20px;">
+                        <div>
+                            <h3 style="margin:0; color:#1e40af;">Gallery Grid Manager</h3>
+                            <p style="margin:5px 0 0; font-size:0.85rem; color:#64748b;">Click any slot to upload. Description is generated automatically from filename.</p>
+                        </div>
+                        <div style="display:flex; gap:10px; align-items:center;">
+                            <div style="display:flex; background:white; border:1px solid #cbd5e1; border-radius:8px; padding:2px 5px; align-items:center; flex:1; max-width:400px;">
+                                <i class="ph ph-link" style="margin:0 8px; color:#94a3b8;"></i>
+                                <input type="text" id="gallery-url-input" placeholder="Paste Google Drive or Image URL..." style="border:none; outline:none; padding:8px; flex:1; font-size:0.85rem;">
+                                <button class="btn btn-primary" onclick="handleGalleryUrlUpload()" style="padding:6px 15px; font-size:0.8rem; border-radius:6px;">Add Link</button>
+                            </div>
+                            <div style="width:1px; height:30px; background:#e2e8f0; margin:0 5px;"></div>
+                            <button class="btn btn-outline" onclick="document.getElementById('gallery-direct-upload').click()" style="border-color:var(--primary); color:var(--primary);">
+                                <i class="ph ph-upload-simple" style="margin-right:5px"></i> Upload Files
+                            </button>
+                            <input type="file" id="gallery-direct-upload" style="display:none" accept="image/*" multiple onchange="handleBulkGalleryUpload(this)">
+                        </div>
+                    </div>
+                </div>
+
+                <div id="gallery-grid-container" class="gallery-admin-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px;">
+                    <!-- 6 slots populated by script.js -->
+                </div>
+            </div>
+
             <!-- Reviews Page -->
             <div id="page-reviews" class="page">
                 <div class="page-header" style="justify-content:space-between">
@@ -968,6 +1001,68 @@
             <div class="modal-footer">
                 <button class="btn btn-outline" onclick="closeModal('bannerModal')">Cancel</button>
                 <button class="btn btn-primary" onclick="saveBanner()">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Gallery Modal -->
+    <div class="modal-overlay" id="galleryModal">
+        <div class="modal">
+            <div class="modal-header">
+                <span class="modal-title" id="galleryModalTitle">Add Gallery Image</span>
+                <button class="close-modal" onclick="closeModal('galleryModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="gallery-form">
+                    <input type="hidden" id="edit-gallery-id" name="id">
+                    
+                    <div id="gallery-single-view">
+                        <div class="form-group"><label class="form-label">Alt Text / Description</label><input type="text" name="alt_text" class="form-control" placeholder="e.g. Fresh Mangoes Harvesting"></div>
+                        <div class="form-group">
+                            <label class="form-label">Gallery Image</label>
+                            <div style="display:flex; gap:10px; align-items:center; margin-bottom:10px">
+                                <input type="text" id="gallery-image-url" name="image_url" class="form-control" style="flex:1" placeholder="Paste URL or Upload ->">
+                                <button type="button" class="btn btn-outline" onclick="document.getElementById('gallery-file').click()">Upload</button>
+                                <input type="file" id="gallery-file" style="display:none" accept="image/*" onchange="handleFileUpload(this, 'image_url', 'gallery-img-preview')">
+                            </div>
+                            <div style="text-align:center">
+                                <img id="gallery-img-preview" src="https://placehold.co/100" style="width:100%; height:160px; border-radius:12px; object-fit:cover; background:#f8fafc; border:1px dashed #cbd5e1; padding:5px; display:none;">
+                            </div>
+                        </div>
+                        <div class="form-group"><label class="form-label">Sort Order</label><input type="number" name="sort_order" class="form-control" value="0"></div>
+                    </div>
+
+                    <div id="gallery-bulk-view" style="display:none;">
+                        <div style="background: #f8fafc; border: 2px dashed #cbd5e1; border-radius: 12px; padding: 20px; text-align: center; margin-bottom: 20px;">
+                            <i class="ph ph-images-square" style="font-size: 3rem; color: #94a3b8; margin-bottom: 10px; display: block;"></i>
+                            <h4 style="margin: 0; color: #475569;">Bulk Upload Images</h4>
+                            <p style="font-size: 0.85rem; color: #64748b; margin: 5px 0 15px;">Select up to 6 images to fill the gallery slots automatically.</p>
+                            <button type="button" class="btn btn-primary" onclick="document.getElementById('gallery-bulk-input').click()">Select Multiple Images</button>
+                            <input type="file" id="gallery-bulk-input" style="display:none;" accept="image/*" multiple onchange="handleBulkGalleryUpload(this)">
+                            <input type="file" id="gallery-direct-upload" style="display:none;" accept="image/*" onchange="handleBulkGalleryUpload(this)">
+                        </div>
+
+                        <div id="bulk-upload-progress" style="display: none;">
+                            <div style="font-size: 0.85rem; font-weight: 700; color: var(--text-main); margin-bottom: 8px; display: flex; justify-content: space-between;">
+                                <span>Uploading images...</span>
+                                <span id="bulk-progress-text">0/0</span>
+                            </div>
+                            <div style="height: 8px; background: #e2e8f0; border-radius: 4px; overflow: hidden;">
+                                <div id="bulk-progress-bar" style="height: 100%; width: 0%; background: var(--primary); transition: width 0.3s ease;"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="ap-toggle-chip">
+                            <input type="checkbox" name="active" checked> Active
+                        </label>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline" onclick="closeModal('galleryModal')">Cancel</button>
+                <button class="btn btn-primary" onclick="saveGallery()">Save Image</button>
             </div>
         </div>
     </div>
