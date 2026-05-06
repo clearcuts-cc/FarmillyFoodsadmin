@@ -2133,411 +2133,6 @@ function openBannerModal() {
     openModal('bannerModal');
 }
 
-// --- Gallery Logic ---
-async function renderGallery() {
-    const grid = document.getElementById('gallery-grid-container');
-    if (!grid) return;
-
-    grid.innerHTML = '<div style="grid-column: 1/-1; text-align: center; padding: 40px;"><i class="ph ph-circle-notch spinner" style="font-size: 2rem; color: var(--primary);"></i></div>';
-
-    try {
-        const { data, error } = await supabaseClient.from('gallery').select('*').order('sort_order', { ascending: true });
-        if (error) throw error;
-
-        // Ensure we always show 6 slots even if some are empty
-        const slots = [];
-        for (let i = 0; i < 6; i++) {
-            slots.push(data[i] || null);
-        }
-
-        grid.innerHTML = slots.map((g, idx) => {
-            if (g) {
-                return `
-            <div class="card gallery-card" style="padding: 0; overflow: hidden; border: 1px solid #e2e8f0; border-radius: 12px; transition: all 0.3s ease;">
-                <div style="position: relative; aspect-ratio: 16/10; background: #f1f5f9;">
-                    <img src="${g.image_url}" style="width: 100%; height: 100%; object-fit: cover;">
-                    <div style="position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,0.6); color: white; padding: 4px 10px; border-radius: 20px; font-size: 0.75rem; font-weight: 700;">
-                        Slot ${idx + 1}
-                    </div>
-                </div>
-                <div style="padding: 12px;">
-                    <div style="font-size: 0.85rem; font-weight: 700; color: var(--text-main); margin-bottom: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-                        ${g.alt_text || 'No Description'}
-                    </div>
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px;">
-                        <label class="switch" style="width: 32px; height: 18px;">
-                            <input type="checkbox" ${g.active ? 'checked' : ''} onchange="toggleGallery('${g.id}', this.checked)">
-                            <span class="slider" style="border-radius: 20px;"></span>
-                        </label>
-                        <div style="display: flex; gap: 8px;">
-                            <button class="action-btn" title="Delete" onclick="deleteGallery('${g.id}')" style="background: #fff1f2; color: #e11d48;"><i class="ph ph-trash"></i></button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            `;
-            } else {
-                return `
-            <div class="gallery-card-empty" id="gallery-slot-${idx}">
-                <div class="empty-slot-content">
-                    <div style="text-align: center; color: #94a3b8;">
-                        <i class="ph ph-image-square" style="font-size: 2.5rem; margin-bottom: 10px; display: block;"></i>
-                        <span style="font-size: 0.9rem; font-weight: 800; color: #475569;">Slot ${idx + 1}</span>
-                        <p style="font-size: 0.75rem; margin-top: 5px; color: #64748b;">Add an image to this slot</p>
-                    </div>
-                    
-                    <div class="empty-slot-actions">
-                        <button class="btn-choice primary" onclick="document.getElementById('gallery-direct-upload').click()">
-                            <i class="ph ph-device-mobile"></i>
-                            Device
-                        </button>
-                        <button class="btn-choice" onclick="event.stopPropagation(); switchToUrlInput(event, ${idx})">
-                            <i class="ph ph-link"></i>
-                            URL
-                        </button>
-                    </div>
-                </div>
-            </div>
-            `;
-            }
-        }).join('');
-
-        // Add Drag & Drop support
-        grid.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            grid.style.background = '#eff6ff';
-            grid.style.border = '2px dashed var(--primary)';
-        });
-
-        grid.addEventListener('dragleave', () => {
-            grid.style.background = 'transparent';
-            grid.style.border = 'none';
-        });
-
-        grid.addEventListener('drop', (e) => {
-            e.preventDefault();
-            grid.style.background = 'transparent';
-            grid.style.border = 'none';
-            const files = e.dataTransfer.files;
-            if (files.length > 0) {
-                handleBulkGalleryUpload({ files: files });
-            }
-        });
-    } catch (err) {
-        showToast("Error loading gallery: " + (err.message || err), 'error');
-        console.error(err);
-    }
-}
-
-async function toggleGallery(id, active) {
-    await supabaseClient.from('gallery').update({ active }).eq('id', id);
-    showToast("Saved successfully ✅");
-    renderGallery();
-}
-
-async function deleteGallery(id) {
-    if (!await showConfirm("Delete Image?", "Are you sure you want to remove this image from the gallery?", "Delete", "#ef4444")) return;
-    const { error } = await supabaseClient.from('gallery').delete().eq('id', id);
-    if (error) showToast("Error deleting: " + error.message, 'error');
-    else { showToast("Image removed successfully ✅"); renderGallery(); }
-}
-
-function openGalleryModal(isBulk = false) {
-    console.warn("⚠️ openGalleryModal called. If this happened unexpectedly, check the caller stack.");
-
-    const form = document.getElementById('gallery-form');
-    if (form) form.reset();
-    document.getElementById('edit-gallery-id').value = '';
-
-    const singleView = document.getElementById('gallery-single-view');
-    const bulkView = document.getElementById('gallery-bulk-view');
-    const saveBtn = document.querySelector('#galleryModal .btn-primary');
-
-    if (isBulk) {
-        document.getElementById('galleryModalTitle').innerText = 'Bulk Upload Gallery';
-        if (singleView) singleView.style.display = 'none';
-        if (bulkView) bulkView.style.display = 'block';
-        if (saveBtn) saveBtn.style.display = 'none'; // Bulk upload processes automatically
-    } else {
-        document.getElementById('galleryModalTitle').innerText = 'Add Gallery Image';
-        if (singleView) singleView.style.display = 'block';
-        if (bulkView) bulkView.style.display = 'none';
-        if (saveBtn) saveBtn.style.display = 'inline-block';
-    }
-
-    const preview = document.getElementById('gallery-img-preview');
-    if (preview) { preview.src = ''; preview.style.display = 'none'; }
-    const urlInput = document.getElementById('gallery-image-url');
-    if (urlInput) urlInput.value = '';
-
-    openModal('galleryModal');
-}
-
-async function editGallery(id) {
-    const { data, error } = await supabaseClient.from('gallery').select('*').eq('id', id).single();
-    if (error || !data) return;
-
-    const form = document.getElementById('gallery-form');
-    document.getElementById('edit-gallery-id').value = data.id;
-    form.elements['alt_text'].value = data.alt_text || '';
-    form.elements['image_url'].value = data.image_url;
-    form.elements['sort_order'].value = data.sort_order;
-    form.elements['active'].checked = data.active;
-
-    document.getElementById('galleryModalTitle').innerText = 'Edit Gallery Image';
-    const preview = document.getElementById('gallery-img-preview');
-    if (preview) { preview.src = data.image_url; preview.style.display = 'block'; }
-
-    openModal('galleryModal');
-}
-
-async function saveGallery() {
-    const form = document.getElementById('gallery-form');
-    const id = document.getElementById('edit-gallery-id').value;
-    const obj = {
-        alt_text: form.elements['alt_text'].value,
-        image_url: form.elements['image_url'].value,
-        sort_order: parseInt(form.elements['sort_order'].value || 0),
-        active: form.elements['active'].checked
-    };
-
-    if (!obj.image_url) { showToast("Image URL is required", 'warning'); return; }
-
-    const btn = document.querySelector('#galleryModal .btn-primary');
-    if (btn) {
-        btn.disabled = true;
-        btn.innerHTML = '<i class="ph ph-circle-notch spinner-white"></i> Saving...';
-    }
-
-    try {
-        let error;
-        if (id) {
-            const { error: err } = await supabaseClient.from('gallery').update(obj).eq('id', id);
-            error = err;
-        } else {
-            const { error: err } = await supabaseClient.from('gallery').insert([obj]);
-            error = err;
-        }
-
-        if (error) throw error;
-
-        showToast("Gallery updated successfully ✅");
-        closeModal('galleryModal');
-        renderGallery();
-    } catch (err) {
-        showToast("Error saving gallery: " + err.message, 'error');
-    } finally {
-        if (btn) {
-            btn.disabled = false;
-            btn.innerHTML = 'Save Image';
-        }
-    }
-}
-
-/**
- * Handles multiple file selection for bulk gallery uploads
- */
-async function handleBulkGalleryUpload(input) {
-    const files = Array.from(input.files);
-    if (files.length === 0) return;
-
-    showToast(`Starting upload for ${files.length} images... ⏳`, 'info');
-
-    let successCount = 0;
-    let failCount = 0;
-
-    for (let i = 0; i < files.length; i++) {
-        try {
-            const file = files[i];
-            const publicUrl = await processSingleGalleryUpload(file, i + 1, files.length);
-
-            if (publicUrl) {
-                const { error } = await supabaseClient.from('gallery').insert([{
-                    image_url: publicUrl,
-                    alt_text: file.name.split('.')[0].replace(/[_-]/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
-                    sort_order: 10 + i,
-                    active: true
-                }]);
-
-                if (error) throw error;
-                successCount++;
-            }
-        } catch (err) {
-            console.error(`Failed to upload file ${i + 1}:`, err);
-            failCount++;
-        }
-    }
-
-    if (successCount > 0) {
-        showToast(`Successfully uploaded ${successCount} images! ✅`, 'success');
-        renderGallery();
-    }
-    if (failCount > 0) {
-        showToast(`Failed to upload ${failCount} images. ❌`, 'error');
-    }
-}
-async function handleGalleryUrlUpload() {
-    const input = document.getElementById('gallery-url-input');
-    let url = input.value.trim();
-    if (!url) return;
-    
-    await handleGalleryUrl(url);
-    input.value = '';
-    closeModal('galleryModal');
-}
-
-async function handleGalleryUrl(url, slotIndex = null) {
-    let finalUrl = url.trim();
-    if (!finalUrl) return;
-
-    // Convert Google Drive sharing links to direct download links
-    if (finalUrl.includes('drive.google.com')) {
-        const match = finalUrl.match(/\/d\/(.+?)\//) || finalUrl.match(/id=(.+?)(&|$)/);
-        if (match && match[1]) {
-            finalUrl = `https://drive.google.com/thumbnail?id=${match[1]}&sz=w1000`;
-        }
-    }
-
-    showToast("Adding image... ⏳", 'info');
-
-    try {
-        const { error } = await supabaseClient.from('gallery').insert([{
-            image_url: finalUrl,
-            alt_text: "Gallery Image",
-            sort_order: slotIndex !== null ? slotIndex + 1 : 10,
-            active: true
-        }]);
-
-        if (error) throw error;
-
-        showToast("Image added successfully! ✅", 'success');
-        renderGallery();
-    } catch (err) {
-        showToast("Error adding link: " + err.message, 'error');
-    }
-}
-
-function switchToUrlInput(e, index) {
-    if (e) {
-        e.preventDefault();
-        e.stopPropagation();
-    }
-    console.log(`🔗 Switching slot ${index} to URL input mode`);
-    
-    const slot = document.getElementById(`gallery-slot-${index}`);
-    if (!slot) {
-        console.error(`❌ Slot gallery-slot-${index} not found!`);
-        return;
-    }
-    
-    slot.innerHTML = `
-        <div class="url-input-container" onclick="event.stopPropagation()">
-            <div style="font-size: 0.7rem; font-weight: 800; color: var(--primary); margin-bottom: 10px; text-transform: uppercase; letter-spacing: 1px;">Paste Image Link</div>
-            <input type="text" class="url-input-field" id="inline-url-${index}" 
-                   placeholder="https://drive.google.com/..." 
-                   onkeydown="if(event.key === 'Enter') submitInlineUrl(${index})"
-                   style="margin-bottom: 15px; border-color: var(--primary-light);">
-            <div class="url-input-actions">
-                <button class="btn-inline cancel" onclick="renderGallery()" style="flex: 1;">Cancel</button>
-                <button class="btn-inline save" onclick="submitInlineUrl(${index})" style="flex: 2;">
-                    <i class="ph ph-plus-circle"></i> Add Image
-                </button>
-            </div>
-        </div>
-    `;
-    
-    // Focus the input
-    setTimeout(() => {
-        const input = document.getElementById(`inline-url-${index}`);
-        if (input) input.focus();
-    }, 50);
-}
-
-async function submitInlineUrl(index) {
-    const input = document.getElementById(`inline-url-${index}`);
-    if (!input) return;
-    
-    const url = input.value.trim();
-    if (!url) {
-        showToast("Please paste a URL first", "info");
-        return;
-    }
-    
-    await handleGalleryUrl(url, index);
-}
-
-
-/**
- * Internal helper for processing a single file upload in a bulk operation
- * Reuse parts of handleFileUpload logic but without direct DOM manipulation
- */
-async function processSingleGalleryUpload(file, index, total) {
-    try {
-        // HEIC conversion if needed
-        let processedFile = file;
-        const isHEIC = file.name.toLowerCase().endsWith('.heic') || file.name.toLowerCase().endsWith('.heif');
-
-        if (isHEIC && typeof heic2any === 'function') {
-            const convertedBlob = await heic2any({ blob: file, toType: "image/jpeg", quality: 0.7 });
-            processedFile = Array.isArray(convertedBlob) ? convertedBlob[0] : convertedBlob;
-        }
-
-        // Create canvas for compression
-        return new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                const img = new Image();
-                img.onload = async () => {
-                    const canvas = document.createElement('canvas');
-                    const MAX_WIDTH = 1000;
-                    const MAX_HEIGHT = 1000;
-                    let width = img.width;
-                    let height = img.height;
-
-                    if (width > height) {
-                        if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; }
-                    } else {
-                        if (height > MAX_HEIGHT) { width *= MAX_HEIGHT / height; height = MAX_HEIGHT; }
-                    }
-
-                    canvas.width = width;
-                    canvas.height = height;
-                    const ctx = canvas.getContext('2d');
-                    ctx.drawImage(img, 0, 0, width, height);
-
-                    const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
-                    const blob = dataURLtoBlob(dataUrl);
-
-                    const safeName = file.name.replace(/[^a-zA-Z0-9.]/g, '_');
-                    const fileName = `gallery/${Date.now()}_${index}_${safeName}`;
-
-                    const { data, error } = await supabaseClient.storage
-                        .from('products')
-                        .upload(fileName, blob, { contentType: 'image/jpeg', upsert: true });
-
-                    if (error) {
-                        reject(error);
-                        return;
-                    }
-
-                    const { data: { publicUrl } } = supabaseClient.storage
-                        .from('products')
-                        .getPublicUrl(fileName);
-
-                    resolve(publicUrl);
-                };
-                img.onerror = () => reject(new Error("Invalid image file"));
-                img.src = e.target.result;
-            };
-            reader.onerror = () => reject(new Error("Failed to read file"));
-            reader.readAsDataURL(processedFile);
-        });
-    } catch (err) {
-        throw err;
-    }
-}
-
-
 // --- Utils & Interactions ---
 function filterTable(tableId, text) {
     if (tableId === 'products-table') {
@@ -3543,7 +3138,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 .subscribe();
         }
     }, 500);
-});
 
     const pnInput = document.getElementById('product-name-input');
     if (pnInput) {
@@ -4891,6 +4485,8 @@ function numberToWords(num) {
     str += (n[4] != 0) ? (a[Number(n[4])] || b[n[4][0]] + ' ' + a[n[4][1]]) + 'Hundred ' : '';
     str += (n[5] != 0) ? ((str != '') ? 'and ' : '') + (a[Number(n[5])] || b[n[5][0]] + ' ' + a[n[5][1]]) : '';
     return 'Indian Rupee ' + str + 'Only';
+}
+
 function renderProductReport() {
     // Already defined logic (placeholder to find end of file if needed, wait, I will just replace the exact end)
     console.log("File end reached");
@@ -4931,10 +4527,21 @@ async function renderGallery() {
                 </div>`;
             } else {
                 html += `
-                <div class="gallery-card-empty" style="border:2px dashed #cbd5e1; border-radius:12px; display:flex; flex-direction:column; justify-content:center; align-items:center; aspect-ratio:1; background:#f8fafc; cursor:pointer;" onclick="document.getElementById('gallery-direct-upload').click()">
-                    <i class="ph ph-upload-simple" style="font-size:2rem; color:#94a3b8; margin-bottom:10px;"></i>
-                    <span style="color:#64748b; font-size:14px; font-weight:600;">Empty Slot ${i+1}</span>
-                    <span style="color:#94a3b8; font-size:11px; margin-top:5px;">Click to Upload File</span>
+                <div class="gallery-card-empty" id="gallery-slot-${i}" style="border:2px dashed #cbd5e1; border-radius:12px; display:flex; flex-direction:column; justify-content:center; align-items:center; aspect-ratio:1; background:#f8fafc; transition: all 0.2s;">
+                    <div class="empty-slot-content" style="text-align: center; width: 100%; display: flex; flex-direction: column; align-items: center;">
+                        <i class="ph ph-image-square" style="font-size:2rem; color:#94a3b8; margin-bottom:10px;"></i>
+                        <span style="color:#475569; font-size:14px; font-weight:800;">Slot ${i+1}</span>
+                        <span style="color:#64748b; font-size:11px; margin-top:5px;">Add an image</span>
+                        
+                        <div class="empty-slot-actions" style="display:flex; gap:10px; margin-top:15px; width: 80%; justify-content: center;">
+                            <button class="btn btn-sm" style="background:var(--primary); color:white; border:none; padding:6px 12px; border-radius:6px; cursor:pointer; flex: 1; display: flex; justify-content: center; align-items: center; gap: 5px; font-size: 12px; font-weight: 600;" onclick="document.getElementById('gallery-direct-upload').click()">
+                                <i class="ph ph-device-mobile"></i> Device
+                            </button>
+                            <button class="btn btn-sm" style="background:white; color:var(--primary); border:1px solid var(--primary); padding:6px 12px; border-radius:6px; cursor:pointer; flex: 1; display: flex; justify-content: center; align-items: center; gap: 5px; font-size: 12px; font-weight: 600;" onclick="event.stopPropagation(); switchToUrlInput(event, ${i})">
+                                <i class="ph ph-link"></i> URL
+                            </button>
+                        </div>
+                    </div>
                 </div>`;
             }
         }
@@ -4980,17 +4587,18 @@ async function handleBulkGalleryUpload(input) {
     showToast(`Uploading ${input.files.length} image(s)... This may take a moment.`, 'info');
     let successCount = 0;
     
-    for (const file of input.files) {
+    for (let i = 0; i < input.files.length; i++) {
+        const file = input.files[i];
         try {
-            // Convert local file to Base64 to bypass storage bucket requirements
-            const base64Str = await getBase64(file);
+            // Compress and upload to Supabase Storage
+            const publicUrl = await processGalleryFileUpload(file, i);
             const altText = file.name.split('.')[0].replace(/[-_]/g, ' ');
             
             const { error } = await supabaseClient.from('gallery').insert([{
-                image_url: base64Str,
+                image_url: publicUrl,
                 alt_text: altText.charAt(0).toUpperCase() + altText.slice(1),
                 active: true,
-                sort_order: Date.now()
+                sort_order: Date.now() + i // slight offset for proper sorting
             }]);
             
             if (error) throw error;
@@ -5005,21 +4613,90 @@ async function handleBulkGalleryUpload(input) {
         showToast(`Successfully uploaded ${successCount} image(s)!`, 'success');
         renderGallery();
     } else {
-        showToast('Failed to upload images.', 'error');
+        showToast('Failed to upload images. Check console for details.', 'error');
     }
 }
 
-function getBase64(file) {
-   return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onload = () => resolve(reader.result);
-      reader.onerror = error => reject(error);
-   });
+async function processGalleryFileUpload(file, index) {
+    try {
+        let fileToUpload = file;
+        const isHEIC = file.name.toLowerCase().endsWith('.heic') || file.name.toLowerCase().endsWith('.heif');
+        const isAnimated = file.type === 'image/gif' || file.name.toLowerCase().endsWith('.gif');
+        const isSVG = file.type === 'image/svg+xml' || file.name.toLowerCase().endsWith('.svg');
+
+        // Convert HEIC formats automatically (iPhones)
+        if (isHEIC && typeof heic2any !== 'undefined') {
+            const convertedBlob = await heic2any({ blob: file, toType: "image/jpeg", quality: 0.85 });
+            fileToUpload = Array.isArray(convertedBlob) ? convertedBlob[0] : convertedBlob;
+        }
+
+        let blobToUpload = fileToUpload;
+        
+        // Skip canvas compression for GIFs and SVGs to preserve animations and vectors
+        if (!isAnimated && !isSVG) {
+            blobToUpload = await new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const img = new Image();
+                    img.onload = () => {
+                        const canvas = document.createElement('canvas');
+                        const MAX_WIDTH = 1200;
+                        const MAX_HEIGHT = 1200;
+                        let width = img.width;
+                        let height = img.height;
+
+                        if (width > height) {
+                            if (width > MAX_WIDTH) { height *= MAX_WIDTH / width; width = MAX_WIDTH; }
+                        } else {
+                            if (height > MAX_HEIGHT) { width *= MAX_HEIGHT / height; height = MAX_HEIGHT; }
+                        }
+
+                        canvas.width = width;
+                        canvas.height = height;
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0, width, height);
+
+                        canvas.toBlob(blob => {
+                            resolve(blob);
+                        }, 'image/jpeg', 0.85);
+                    };
+                    img.onerror = () => reject(new Error("Invalid image format"));
+                    img.src = e.target.result;
+                };
+                reader.onerror = () => reject(new Error("Failed to read file"));
+                reader.readAsDataURL(fileToUpload);
+            });
+        }
+
+        const safeName = file.name.replace(/[^a-zA-Z0-9.]/g, '_');
+        const extension = isHEIC ? '.jpg' : '';
+        const fileName = `gallery/${Date.now()}_${index}_${safeName}${extension}`;
+        
+        const contentType = isSVG ? 'image/svg+xml' : (isAnimated ? 'image/gif' : 'image/jpeg');
+
+        // Upload to 'products' bucket where other images live
+        const { data, error } = await supabaseClient.storage
+            .from('products')
+            .upload(fileName, blobToUpload, { 
+                contentType: contentType, 
+                upsert: false 
+            });
+
+        if (error) throw error;
+
+        const { data: { publicUrl } } = supabaseClient.storage
+            .from('products')
+            .getPublicUrl(fileName);
+
+        return publicUrl;
+    } catch (err) {
+        console.error("Image Processing Error:", err);
+        throw err;
+    }
 }
 
 async function deleteGalleryImage(id) {
-    if (!confirm('Are you sure you want to remove this image from the gallery?')) return;
+    if (!await showConfirm("Delete Image?", "Are you sure you want to remove this image from the gallery?", "Delete", "#ef4444")) return;
     
     try {
         showToast('Removing image...', 'info');
@@ -5032,4 +4709,77 @@ async function deleteGalleryImage(id) {
         console.error('❌ Error deleting gallery image:', err);
         showToast('Failed to delete image: ' + err.message, 'error');
     }
+}
+
+async function handleGalleryUrl(url, slotIndex = null) {
+    let finalUrl = url.trim();
+    if (!finalUrl) return;
+
+    // Convert Google Drive sharing links to direct download links
+    if (finalUrl.includes('drive.google.com')) {
+        const match = finalUrl.match(/\/d\/(.+?)\//) || finalUrl.match(/id=(.+?)(&|$)/);
+        if (match && match[1]) {
+            finalUrl = `https://drive.google.com/thumbnail?id=${match[1]}&sz=w1000`;
+        }
+    }
+
+    showToast("Adding image... ⏳", 'info');
+
+    try {
+        const { error } = await supabaseClient.from('gallery').insert([{
+            image_url: finalUrl,
+            alt_text: "Gallery Image",
+            sort_order: slotIndex !== null ? slotIndex + 1 : Date.now(),
+            active: true
+        }]);
+
+        if (error) throw error;
+
+        showToast("Image added successfully! ✅", 'success');
+        renderGallery();
+    } catch (err) {
+        showToast("Error adding link: " + err.message, 'error');
+    }
+}
+
+function switchToUrlInput(e, index) {
+    if (e) {
+        e.preventDefault();
+        e.stopPropagation();
+    }
+    
+    const slot = document.getElementById(`gallery-slot-${index}`);
+    if (!slot) return;
+    
+    slot.innerHTML = `
+        <div class="url-input-container" onclick="event.stopPropagation()" style="width: 90%; display: flex; flex-direction: column; gap: 10px; align-items: center;">
+            <div style="font-size: 0.7rem; font-weight: 800; color: var(--primary); text-transform: uppercase; letter-spacing: 1px;">Paste Image Link</div>
+            <input type="text" class="url-input-field" id="inline-url-${index}" 
+                   placeholder="https://drive.google.com/..." 
+                   onkeydown="if(event.key === 'Enter') submitInlineUrl(${index})"
+                   style="width: 100%; padding: 8px; border: 1px solid var(--primary-light); border-radius: 6px; font-size: 0.8rem; outline: none;">
+            <div class="url-input-actions" style="display: flex; gap: 8px; width: 100%;">
+                <button onclick="renderGallery()" style="flex: 1; padding: 6px; border-radius: 6px; border: none; background: #e2e8f0; color: #475569; font-size: 12px; font-weight: 600; cursor: pointer;">Cancel</button>
+                <button onclick="submitInlineUrl(${index})" style="flex: 1.5; padding: 6px; border-radius: 6px; border: none; background: var(--primary); color: white; font-size: 12px; font-weight: 600; cursor: pointer;">Add Image</button>
+            </div>
+        </div>
+    `;
+    
+    setTimeout(() => {
+        const input = document.getElementById(`inline-url-${index}`);
+        if (input) input.focus();
+    }, 50);
+}
+
+async function submitInlineUrl(index) {
+    const input = document.getElementById(`inline-url-${index}`);
+    if (!input) return;
+    
+    const url = input.value.trim();
+    if (!url) {
+        showToast("Please paste a URL first", "info");
+        return;
+    }
+    
+    await handleGalleryUrl(url, index);
 }
