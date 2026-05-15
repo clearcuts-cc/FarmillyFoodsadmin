@@ -26,6 +26,7 @@ let allOrders = [];
 let currentOrderFilter = 'all';
 let notifications = [];
 let currentModalOrder = null;
+window.mangoPricing = { 'imam': 249, 'alph': 189, 'bang': 179, 'sent': 149 };
 
 // --- Boot: wait for Supabase then load data ---
 function tryInit() {
@@ -122,6 +123,7 @@ async function loadDashboardData() {
         if (prodRes.data) allProducts = prodRes.data;
         if (orderRes.data) allOrders = orderRes.data;
 
+        await fetchMangoPricing();
         console.log('✅ Dashboard data ready');
     } catch (e) {
         console.error('❌ Data pre-fetch failed:', e);
@@ -166,6 +168,7 @@ function showAdminContent() {
     if (supabaseClient) {
         console.log('📊 Admin content visible, bootApp handling data load...');
         fetchDeliveryConfig(); 
+        fetchMangoPricing();
     } else {
         console.error('❌ showAdminContent: supabaseClient is NULL!');
     }
@@ -620,6 +623,12 @@ function parseVariantQuantities(rawValue) {
 function getBasePricePerKg(product) {
     if (!product) return 0;
     const lowerName = (product.name || '').toLowerCase();
+
+    // Apply Dynamic Mango Pricing Overrides
+    for (const k in window.mangoPricing) {
+        if (lowerName.includes(k)) return window.mangoPricing[k];
+    }
+
     if (lowerName.includes('custom heritage')) {
         const keys = ['imam', 'alph', 'bang', 'sent'];
         const rates = keys.map(k => getProductRateByKeyword(k)).filter(r => r > 0);
@@ -895,6 +904,44 @@ async function fetchDeliveryConfig() {
             });
         }
     } catch (err) { console.error("Error fetching delivery config:", err); }
+}
+
+async function fetchMangoPricing() {
+    try {
+        const { data } = await supabaseClient.from('store_settings').select('value').eq('key', 'mango_pricing').maybeSingle();
+        if (data && data.value) {
+            window.mangoPricing = data.value;
+            // Populate inputs if they exist
+            const mapping = { 'price-imam': 'imam', 'price-alph': 'alph', 'price-bang': 'bang', 'price-sent': 'sent' };
+            for (const id in mapping) {
+                const el = document.getElementById(id);
+                if (el) el.value = window.mangoPricing[mapping[id]] || '';
+            }
+        }
+    } catch (err) { console.error("Error fetching mango pricing:", err); }
+}
+
+async function updateMangoPricing() {
+    const pricing = {
+        imam: parseInt(document.getElementById('price-imam').value) || 249,
+        alph: parseInt(document.getElementById('price-alph').value) || 189,
+        bang: parseInt(document.getElementById('price-bang').value) || 179,
+        sent: parseInt(document.getElementById('price-sent').value) || 149
+    };
+
+    try {
+        const { error } = await supabaseClient.from('store_settings').upsert({
+            key: 'mango_pricing',
+            value: pricing,
+            updated_at: new Date().toISOString()
+        }, { onConflict: 'key' });
+
+        if (error) throw error;
+        window.mangoPricing = pricing;
+        showToast("Mango variety prices updated successfully 🥭");
+    } catch (err) {
+        showToast("Error updating prices: " + err.message, 'error');
+    }
 }
 
 async function updateDeliveryConfig(source = 'delivery') {
